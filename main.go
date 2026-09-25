@@ -11,10 +11,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"jenklod-batman/internal/config"
-	"jenklod-batman/internal/jenkins"
-	"jenklod-batman/internal/secret"
-	"jenklod-batman/internal/ui"
+	"github.com/krank56/jenklod-batman/internal/config"
+	"github.com/krank56/jenklod-batman/internal/jenkins"
+	"github.com/krank56/jenklod-batman/internal/secret"
+	"github.com/krank56/jenklod-batman/internal/ui"
 )
 
 var version = "dev"

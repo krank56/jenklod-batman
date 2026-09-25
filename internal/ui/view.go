@@ -7,7 +7,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"jenklod-batman/internal/jenkins"
+	"github.com/krank56/jenklod-batman/internal/jenkins"
 )
 
 const footerLines = 3 // cat lane (2) + status line

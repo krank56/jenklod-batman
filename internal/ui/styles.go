@@ -3,7 +3,7 @@ package ui
 import (
 	"github.com/charmbracelet/lipgloss"
 
-	"jenklod-batman/internal/jenkins"
+	"github.com/krank56/jenklod-batman/internal/jenkins"
 )
 
 var (

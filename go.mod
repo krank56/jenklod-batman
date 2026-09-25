@@ -1,4 +1,4 @@
-module jenklod-batman
+module github.com/krank56/jenklod-batman
 
 go 1.26.0
 

@@ -14,9 +14,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"jenklod-batman/internal/config"
-	"jenklod-batman/internal/jenkins"
-	"jenklod-batman/internal/notify"
+	"github.com/krank56/jenklod-batman/internal/config"
+	"github.com/krank56/jenklod-batman/internal/jenkins"
+	"github.com/krank56/jenklod-batman/internal/notify"
 )
 
 type screen int

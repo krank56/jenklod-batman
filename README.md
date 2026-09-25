@@ -5,6 +5,13 @@ A terminal UI for managing Jenkins jobs. It has a bat-signal splash screen and a
 ## Install
 
 ```sh
+go install github.com/krank56/jenklod-batman@latest
+```
+
+Prebuilt binaries for macOS and Linux (amd64 and arm64) are attached to each
+[release](https://github.com/krank56/jenklod-batman/releases). From a clone:
+
+```sh
 make install        # into ~/go/bin (override with INSTALL_DIR=...)
 # or
 make build && ./bin/jenklod-batman
@@ -84,3 +91,7 @@ pinned = ["gotham/deploy"]
 make test   # Jenkins client and a UI flow against a fake Jenkins
 JB_SNAPSHOTS=/tmp/snap go test ./internal/ui/   # dump rendered screens
 ```
+
+## License
+
+[MIT](LICENSE)

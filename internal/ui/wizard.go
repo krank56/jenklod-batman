@@ -7,9 +7,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"jenklod-batman/internal/config"
-	"jenklod-batman/internal/jenkins"
-	"jenklod-batman/internal/secret"
+	"github.com/krank56/jenklod-batman/internal/config"
+	"github.com/krank56/jenklod-batman/internal/jenkins"
+	"github.com/krank56/jenklod-batman/internal/secret"
 )
 
 // WizardFunc validates the entered settings, persists them (config file +

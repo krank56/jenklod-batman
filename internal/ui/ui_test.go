@@ -14,8 +14,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"jenklod-batman/internal/config"
-	"jenklod-batman/internal/jenkins"
+	"github.com/krank56/jenklod-batman/internal/config"
+	"github.com/krank56/jenklod-batman/internal/jenkins"
 )
 
 // fakeJenkins serves a tiny Gotham: a folder with a parameterised job.

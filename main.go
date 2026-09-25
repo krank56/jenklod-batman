@@ -35,7 +35,7 @@ func run() error {
 		cfgPath     = flag.String("config", defPath, "config file")
 		noAnim      = flag.Bool("no-anim", false, "skip the splash and keep the cat still")
 		setup       = flag.Bool("setup", false, "re-run the setup form (URL, user, token)")
-		forget      = flag.Bool("forget-token", false, "remove the stored token from the Keychain and exit")
+		forget      = flag.Bool("forget-token", false, "remove the stored token from the keyring and exit")
 		showVersion = flag.Bool("version", false, "print the version and exit")
 	)
 	flag.Parse()
@@ -57,7 +57,7 @@ func run() error {
 		if err := secret.Delete(cfg.URL, cfg.User); err != nil {
 			return err
 		}
-		fmt.Println("Token removed from the Keychain.")
+		fmt.Println("Token removed from the " + secret.StoreName() + ".")
 		return nil
 	}
 
@@ -70,7 +70,7 @@ func run() error {
 				return err
 			}
 		case !errors.Is(err, secret.ErrMissing):
-			return fmt.Errorf("reading token from Keychain: %w", err)
+			return fmt.Errorf("reading token from the %s: %w", secret.StoreName(), err)
 		}
 	}
 
@@ -85,7 +85,7 @@ func run() error {
 }
 
 // wizardFunc checks the entered settings against Jenkins before saving
-// anything, so a typo never ends up in the config or Keychain.
+// anything, so a typo never ends up in the config or keyring.
 func wizardFunc(cfg *config.Config) ui.WizardFunc {
 	return func(url, user, token string) (*jenkins.Client, string, error) {
 		if url == "" || user == "" {
@@ -113,7 +113,7 @@ func wizardFunc(cfg *config.Config) ui.WizardFunc {
 		}
 		if typed {
 			if err := secret.Set(url, user, token); err != nil {
-				return nil, "", fmt.Errorf("saving token to Keychain: %w", err)
+				return nil, "", fmt.Errorf("saving token to the %s: %w", secret.StoreName(), err)
 			}
 		}
 		cfg.URL, cfg.User = url, user

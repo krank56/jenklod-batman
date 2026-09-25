@@ -66,7 +66,8 @@ type Model struct {
 	statusErr bool
 	statusAt  time.Time
 
-	watch map[string]*watchState
+	watch        map[string]*watchState
+	notifyWarned bool
 }
 
 type jobsState struct {
@@ -517,6 +518,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case watchResultMsg:
 		return m, m.handleWatch(msg)
 
+	case notifyFailedMsg:
+		// Say it once; the in-app status line still shows every event.
+		if !m.notifyWarned {
+			m.notifyWarned = true
+			m.setStatus("Desktop notification failed: "+strings.ReplaceAll(msg.err.Error(), "\n", ": "), true)
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -558,10 +567,7 @@ func (m *Model) handleWatch(msg watchResultMsg) tea.Cmd {
 		body = "The Joker struck. " + body
 		m.setStatus("✘ "+title, true)
 	}
-	return func() tea.Msg {
-		_ = notify.Send("🦇 "+title, body)
-		return nil
-	}
+	return sendNotification("🦇 "+title, body)
 }
 
 // notifyInputs tells about each input step once, even on the first poll:
@@ -580,12 +586,20 @@ func (m *Model) notifyInputs(name string, st *watchState, b *jenkins.Build) tea.
 		title := fmt.Sprintf("%s #%d needs you", name, b.Number)
 		m.setStatus("⏸ "+title+": "+in.Message, false)
 		msg := in.Message
-		cmds = append(cmds, func() tea.Msg {
-			_ = notify.Send("🦇 "+title, msg+" — open jenklod-batman and press i")
-			return nil
-		})
+		cmds = append(cmds, sendNotification("🦇 "+title, msg+" — open jenklod-batman and press i"))
 	}
 	return tea.Batch(cmds...)
+}
+
+type notifyFailedMsg struct{ err error }
+
+func sendNotification(title, body string) tea.Cmd {
+	return func() tea.Msg {
+		if err := notify.Send(title, body); err != nil {
+			return notifyFailedMsg{err}
+		}
+		return nil
+	}
 }
 
 func (m Model) anyBuilding() bool {

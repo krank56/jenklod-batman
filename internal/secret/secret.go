@@ -1,10 +1,12 @@
 // Package secret resolves the Jenkins API token: $JENKINS_TOKEN when set,
-// otherwise the macOS Keychain. The token is never written to disk by us.
+// otherwise the system keyring (macOS Keychain, or the Secret Service on
+// Linux: gnome-keyring, KWallet...). The token is never written to disk by us.
 package secret
 
 import (
 	"errors"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/zalando/go-keyring"
@@ -12,7 +14,7 @@ import (
 
 const (
 	service = "jenklod-batman"
-	// EnvVar overrides the Keychain for one-off runs.
+	// EnvVar overrides the keyring for one-off runs.
 	EnvVar = "JENKINS_TOKEN"
 )
 
@@ -21,8 +23,16 @@ type Source string
 
 const (
 	FromEnv      Source = "$" + EnvVar
-	FromKeychain Source = "Keychain"
+	FromKeychain Source = "keyring"
 )
+
+// StoreName is how the keyring is called on this system, for messages.
+func StoreName() string {
+	if runtime.GOOS == "darwin" {
+		return "macOS Keychain"
+	}
+	return "system keyring"
+}
 
 // ErrMissing means no token is available.
 var ErrMissing = errors.New("no API token found")
@@ -46,7 +56,7 @@ func Get(url, user string) (string, Source, error) {
 	return t, FromKeychain, nil
 }
 
-// Set stores the token in the Keychain.
+// Set stores the token in the keyring.
 func Set(url, user, token string) error {
 	return keyring.Set(service, account(url, user), token)
 }

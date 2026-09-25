@@ -13,8 +13,8 @@ import (
 )
 
 // WizardFunc validates the entered settings, persists them (config file +
-// Keychain) and returns a ready client. An empty token means "use the one
-// already available" ($JENKINS_TOKEN or Keychain).
+// keyring) and returns a ready client. An empty token means "use the one
+// already available" ($JENKINS_TOKEN or keyring).
 type WizardFunc func(url, user, token string) (client *jenkins.Client, who string, err error)
 
 type wizardDoneMsg struct {
@@ -42,7 +42,7 @@ func newWizard(cfg *config.Config, fn WizardFunc) wizard {
 	}
 	url := mk("Jenkins URL  ", "https://jenkins.example.com", cfg.URL)
 	user := mk("User         ", "bruce.wayne", cfg.User)
-	token := mk("API token    ", "paste it — stored in macOS Keychain", "")
+	token := mk("API token    ", "paste it — stored in the "+secret.StoreName(), "")
 	token.EchoMode = textinput.EchoPassword
 	token.EchoCharacter = '•'
 	w := wizard{inputs: []textinput.Model{url, user, token}, submit: fn}
@@ -100,13 +100,13 @@ func (w wizard) view(width, height, frame int) string {
 	var b strings.Builder
 	b.WriteString(sTitle.Render("🦇 JENKLOD-BATMAN · SETUP") + "\n\n")
 	b.WriteString(sDim.Render("Connect to your Jenkins. The URL and user go to the config file;") + "\n")
-	b.WriteString(sDim.Render("the token goes to the macOS Keychain, never to disk.") + "\n\n")
+	b.WriteString(sDim.Render("the token goes to the "+secret.StoreName()+", never to disk.") + "\n\n")
 	for _, in := range w.inputs {
 		b.WriteString(in.View() + "\n")
 	}
 	b.WriteString("\n")
 	b.WriteString(sDim.Render("Create a token in Jenkins: your name → Security → API Token → Add new token.") + "\n")
-	b.WriteString(sDim.Render("Leave the token empty to use $"+secret.EnvVar+" or the one already in Keychain.") + "\n\n")
+	b.WriteString(sDim.Render("Leave the token empty to use $"+secret.EnvVar+" or the one already in the "+secret.StoreName()+".") + "\n\n")
 	switch {
 	case w.busy:
 		b.WriteString(sKey.Render(spinner[frame%len(spinner)]) + " Lighting the bat-signal…")

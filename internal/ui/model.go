@@ -28,6 +28,8 @@ const (
 	scrBuilds
 	scrLog
 	scrParams
+	scrMacros
+	scrMacroEdit
 )
 
 const frameDelay = 100 * time.Millisecond
@@ -67,7 +69,18 @@ type Model struct {
 	statusAt  time.Time
 
 	watch        map[string]*watchState
+	watchGen     int // bumped when the poll interval changes
 	notifyWarned bool
+
+	// index is every job and folder, for searching across folders.
+	index        []jenkins.Job
+	indexBy      map[string]jenkins.Job
+	indexLoading bool
+	indexErr     error
+
+	macros    macrosState
+	run       *macroRun
+	macroPoll time.Duration // tests shorten the runner's wait between checks
 }
 
 type jobsState struct {
@@ -79,6 +92,8 @@ type jobsState struct {
 	filtering bool
 	loading   bool
 	err       error
+	// selectAfter puts the cursor on this job once the folder has loaded.
+	selectAfter string
 }
 
 type buildsState struct {
@@ -120,6 +135,12 @@ type paramsState struct {
 	input    *jenkins.InputRequest
 	number   int
 	returnTo screen
+
+	// forMacro saves the values into a macro step instead of building;
+	// macroStep is the step index, or -1 to append one.
+	forMacro    bool
+	macroStep   int
+	skippedPass int // password parameters left out of the macro
 }
 
 type paramField struct {
@@ -139,13 +160,15 @@ type watchState struct {
 	building bool
 	known    bool
 	asked    map[string]bool // "<build>/<input id>" already notified
+	last     *jenkins.Build  // nil until polled, or if it never ran
+	err      error           // the last poll failed (deleted, renamed, forbidden…)
 }
 
 // New builds the root model.
 func New(o Options) Model {
 	fi := textinput.New()
 	fi.Prompt = "/"
-	fi.Placeholder = "filter"
+	fi.Placeholder = "search all folders"
 	m := Model{
 		cfg:    o.Config,
 		client: o.Client,
@@ -173,7 +196,19 @@ func (m Model) afterSplash() screen {
 // ---- messages ---------------------------------------------------------
 
 type tickMsg struct{}
-type watchTickMsg struct{}
+type watchTickMsg struct{ gen int }
+
+type indexMsg struct {
+	jobs []jenkins.Job
+	err  error
+}
+
+type lastBuildMsg struct {
+	job    jenkins.Job
+	build  *jenkins.Build
+	err    error
+	action string // "log" or "abort"
+}
 
 type jobsMsg struct {
 	path []string
@@ -218,7 +253,28 @@ type watchResultMsg struct {
 func tick() tea.Cmd { return tea.Tick(frameDelay, func(time.Time) tea.Msg { return tickMsg{} }) }
 
 func (m Model) watchTick() tea.Cmd {
-	return tea.Tick(time.Duration(m.cfg.PollSeconds)*time.Second, func(time.Time) tea.Msg { return watchTickMsg{} })
+	gen := m.watchGen
+	return tea.Tick(time.Duration(m.cfg.PollSeconds)*time.Second, func(time.Time) tea.Msg { return watchTickMsg{gen: gen} })
+}
+
+func (m Model) loadIndex() tea.Cmd {
+	c := m.client
+	return func() tea.Msg {
+		cx, cancel := ctx()
+		defer cancel()
+		jobs, err := c.AllJobs(cx)
+		return indexMsg{jobs: jobs, err: err}
+	}
+}
+
+func (m Model) loadLastBuild(job jenkins.Job, action string) tea.Cmd {
+	c := m.client
+	return func() tea.Msg {
+		cx, cancel := ctx()
+		defer cancel()
+		b, err := c.LastBuild(cx, job.Path)
+		return lastBuildMsg{job: job, build: b, err: err, action: action}
+	}
 }
 
 func ctx() (context.Context, context.CancelFunc) {
@@ -319,14 +375,16 @@ func (m Model) abort(job jenkins.Job, number int) tea.Cmd {
 
 func (m Model) pollWatched() tea.Cmd {
 	var cmds []tea.Cmd
-	for _, name := range m.cfg.Pinned {
+	for _, name := range m.cfg.Pins() {
 		name, c := name, m.client
+		// Freestyle jobs never pause on input; unknown ones might.
+		pipeline := m.pinJob(name).IsPipeline()
 		cmds = append(cmds, func() tea.Msg {
 			cx, cancel := ctx()
 			defer cancel()
 			path := jenkins.SplitFullName(name)
 			b, err := c.LastBuild(cx, path)
-			if err == nil && b != nil && b.Building {
+			if err == nil && b != nil && b.Building && pipeline {
 				b.Inputs, _ = c.PendingInputs(cx, path, b.Number) // best effort
 			}
 			return watchResultMsg{name: name, build: b, err: err}
@@ -357,7 +415,8 @@ func (m Model) Init() tea.Cmd {
 
 func (m *Model) connected() []tea.Cmd {
 	m.jobs.loading = true
-	return []tea.Cmd{m.loadJobs(nil), m.pollWatched(), m.watchTick()}
+	m.indexLoading = true
+	return []tea.Cmd{m.loadJobs(nil), m.loadIndex(), m.pollWatched(), m.watchTick()}
 }
 
 func (m *Model) setStatus(s string, isErr bool) {
@@ -422,8 +481,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.jobs.items = msg.jobs
-		m.jobs.cursor = clamp(m.jobs.cursor, 0, max(0, len(m.visibleJobs())-1))
+		if name := m.jobs.selectAfter; name != "" {
+			m.jobs.selectAfter = ""
+			for i, r := range m.rows() {
+				if !r.pin && r.job.Name == name {
+					m.jobs.cursor = i
+				}
+			}
+		}
+		m.jobs.cursor = clamp(m.jobs.cursor, 0, max(0, len(m.rows())-1))
 		return m, nil
+
+	case indexMsg:
+		m.indexLoading = false
+		m.indexErr = msg.err
+		if msg.err != nil {
+			m.setErr(fmt.Errorf("loading jobs for search: %w", msg.err))
+			return m, nil
+		}
+		m.index = msg.jobs
+		m.indexBy = make(map[string]jenkins.Job, len(msg.jobs))
+		for _, j := range msg.jobs {
+			m.indexBy[j.FullName()] = j
+		}
+		return m, nil
+
+	case lastBuildMsg:
+		return m.handleLastBuild(msg)
 
 	case detailMsg:
 		if msg.job.FullName() != m.builds.job.FullName() {
@@ -510,9 +594,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.log.inputs = nil
 			return m, m.loadLogInputs(m.log.gen, m.log.job, m.log.number)
 		}
+		if msg.refresh && m.scr == scrJobs {
+			return m, m.pollWatched()
+		}
 		return m, nil
 
 	case watchTickMsg:
+		if msg.gen != m.watchGen {
+			return m, nil // superseded by a new interval
+		}
 		return m, tea.Batch(m.pollWatched(), m.watchTick())
 
 	case watchResultMsg:
@@ -525,6 +615,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setStatus("Desktop notification failed: "+strings.ReplaceAll(msg.err.Error(), "\n", ": "), true)
 		}
 		return m, nil
+
+	case macroEventMsg, macroDoneMsg, stepDetailMsg, macroActionMsg:
+		return m.handleMacroMsg(msg)
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
@@ -539,14 +632,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleWatch(msg watchResultMsg) tea.Cmd {
-	if msg.err != nil || msg.build == nil || !m.cfg.IsPinned(msg.name) {
+	if !m.cfg.IsPinned(msg.name) {
 		return nil
 	}
-	b := msg.build
 	st := m.watch[msg.name]
 	if st == nil {
 		st = &watchState{}
 		m.watch[msg.name] = st
+	}
+	// Shown on the pin's row, not notified: it fails on every poll.
+	st.err = msg.err
+	if msg.err != nil {
+		return nil
+	}
+	b := msg.build
+	st.last = b
+	if b == nil {
+		// Never built: remember that, so a first build that starts and
+		// finishes between two polls still counts as finished.
+		st.number, st.building, st.known = 0, false, true
+		return nil
 	}
 	finished := !b.Building && st.known &&
 		(b.Number > st.number || (b.Number == st.number && st.building))
@@ -651,6 +756,9 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.scr == scrParams {
 		return m.paramsKey(k)
 	}
+	if m.scr == scrMacroEdit {
+		return m.macroEditKey(k)
+	}
 
 	switch k.String() {
 	case "?":
@@ -659,6 +767,12 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "a":
 		m.anim = !m.anim
 		return m, nil
+	case "p":
+		return m.cyclePoll()
+	case "m":
+		if m.scr != scrMacros {
+			return m.openMacros()
+		}
 	case "q":
 		if m.scr == scrJobs {
 			return m, tea.Quit
@@ -673,6 +787,8 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.buildsKey(k)
 	case scrLog:
 		return m.logKey(k)
+	case scrMacros:
+		return m.macrosKey(k)
 	}
 	return m, nil
 }
@@ -688,6 +804,8 @@ func (m Model) back() (tea.Model, tea.Cmd) {
 		m.scr = m.params.returnTo
 	case scrBuilds:
 		m.scr = scrJobs
+	case scrMacros:
+		return m.leaveMacros()
 	case scrJobs:
 		if len(m.jobs.path) == 0 {
 			return m, nil
@@ -706,30 +824,83 @@ func (m Model) back() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// cyclePoll steps the watch interval through the presets and saves it.
+func (m Model) cyclePoll() (tea.Model, tea.Cmd) {
+	prev := m.cfg.PollSeconds
+	m.cfg.PollSeconds = m.cfg.NextPoll()
+	if err := m.cfg.Save(); err != nil {
+		m.cfg.PollSeconds = prev
+		m.setErr(fmt.Errorf("saving poll interval: %w", err))
+		return m, nil
+	}
+	m.watchGen++ // drop the tick scheduled with the old interval
+	m.setStatus(fmt.Sprintf("⟳ Polling watched jobs every %ds", m.cfg.PollSeconds), false)
+	return m, m.watchTick()
+}
+
 func (m *Model) clearFilter() {
 	m.jobs.filter.SetValue("")
 	m.jobs.filter.Blur()
 	m.jobs.filtering = false
 }
 
-func (m Model) visibleJobs() []jenkins.Job {
-	q := strings.ToLower(m.jobs.filter.Value())
-	if q == "" {
-		return m.jobs.items
+// row is a line of the jobs screen.
+type row struct {
+	job   jenkins.Job
+	pin   bool // in the Watched section at the top of the root
+	other bool // a search hit outside the current folder
+}
+
+// pinJob turns a pinned full name into a job, with its class and color
+// when the search index knows it.
+func (m Model) pinJob(name string) jenkins.Job {
+	if j, ok := m.indexBy[name]; ok {
+		return j
 	}
-	var out []jenkins.Job
-	for _, j := range m.jobs.items {
-		if strings.Contains(strings.ToLower(j.Name), q) {
-			out = append(out, j)
+	path := jenkins.SplitFullName(name)
+	j := jenkins.Job{Path: path}
+	if len(path) > 0 {
+		j.Name = path[len(path)-1]
+	}
+	return j
+}
+
+// rows is what the jobs screen lists: the watched jobs (at the root) then
+// the folder; or, while searching, the folder's matches then everyone
+// else's.
+func (m Model) rows() []row {
+	q := m.jobs.filter.Value()
+	var out []row
+	if q == "" {
+		if len(m.jobs.path) == 0 {
+			for _, name := range m.cfg.Pins() {
+				out = append(out, row{job: m.pinJob(name), pin: true})
+			}
 		}
+		for _, j := range m.jobs.items {
+			out = append(out, row{job: j})
+		}
+		return out
+	}
+	for _, j := range rankJobs(q, m.jobs.items, func(j jenkins.Job) string { return j.Name }) {
+		out = append(out, row{job: j})
+	}
+	var elsewhere []jenkins.Job
+	for _, j := range m.index {
+		if !pathEqual(j.Path[:len(j.Path)-1], m.jobs.path) {
+			elsewhere = append(elsewhere, j)
+		}
+	}
+	for _, j := range rankJobs(q, elsewhere, jenkins.Job.FullName) {
+		out = append(out, row{job: j, other: true})
 	}
 	return out
 }
 
-func (m Model) selectedJob() (jenkins.Job, bool) {
-	v := m.visibleJobs()
+func (m Model) selectedRow() (row, bool) {
+	v := m.rows()
 	if m.jobs.cursor < 0 || m.jobs.cursor >= len(v) {
-		return jenkins.Job{}, false
+		return row{}, false
 	}
 	return v[m.jobs.cursor], true
 }
@@ -777,11 +948,15 @@ func (m Model) jobsKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := k.String()
 	switch key {
 	case "j", "k", "down", "up", "g", "G", "home", "end", "ctrl+d", "ctrl+u", "pgdown", "pgup":
-		m.jobs.cursor = moveCursor(m.jobs.cursor, len(m.visibleJobs()), key, m.listHeight())
+		m.jobs.cursor = moveCursor(m.jobs.cursor, len(m.rows()), key, m.listHeight())
 		return m, nil
 	case "/":
 		m.jobs.filtering = true
 		m.jobs.filter.Focus()
+		if m.index == nil && !m.indexLoading {
+			m.indexLoading = true
+			return m, tea.Batch(textinput.Blink, m.loadIndex())
+		}
 		return m, textinput.Blink
 	case "esc":
 		if m.jobs.filter.Value() != "" {
@@ -793,15 +968,20 @@ func (m Model) jobsKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.back()
 	case "r":
 		m.jobs.loading = true
-		return m, m.loadJobs(m.jobs.path)
+		m.indexLoading = true
+		return m, tea.Batch(m.loadJobs(m.jobs.path), m.loadIndex(), m.pollWatched())
 	}
 
-	job, ok := m.selectedJob()
+	r, ok := m.selectedRow()
 	if !ok {
 		return m, nil
 	}
+	job := r.job
 	switch key {
 	case "l", "right", "enter":
+		if r.pin || r.other {
+			return m.jumpTo(job)
+		}
 		if job.IsFolder() {
 			m.jobs.cursors = append(m.jobs.cursors, m.jobs.cursor)
 			m.jobs.path = job.Path
@@ -812,6 +992,24 @@ func (m Model) jobsKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.loadJobs(job.Path)
 		}
 		return m.openBuilds(job)
+	case "J", "K":
+		if !r.pin {
+			return m, nil
+		}
+		delta := 1
+		if key == "K" {
+			delta = -1
+		}
+		if !m.cfg.MovePin(job.FullName(), delta) {
+			return m, nil
+		}
+		if err := m.cfg.Save(); err != nil {
+			m.cfg.MovePin(job.FullName(), -delta)
+			m.setErr(fmt.Errorf("saving pins: %w", err))
+			return m, nil
+		}
+		m.jobs.cursor += delta
+		return m, nil
 	case "o":
 		return m, openURL(m.client.BrowserURL(job.Path, 0))
 	case "w":
@@ -819,7 +1017,10 @@ func (m Model) jobsKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setStatus("Folders cannot be watched — pin a job inside it", true)
 			return m, nil
 		}
-		return m.togglePin(job)
+		m2, cmd := m.togglePin(job)
+		mm := m2.(Model)
+		mm.jobs.cursor = clamp(mm.jobs.cursor, 0, max(0, len(mm.rows())-1))
+		return mm, cmd
 	case "b":
 		if job.IsFolder() {
 			return m, nil
@@ -829,13 +1030,73 @@ func (m Model) jobsKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		mm := m2.(Model)
 		mm.builds.pendingBuild = true
 		return mm, cmd
+	case "L", "x":
+		if job.IsFolder() {
+			return m, nil
+		}
+		action := "log"
+		if key == "x" {
+			action = "abort"
+		}
+		return m, m.loadLastBuild(job, action)
 	}
 	return m, nil
+}
+
+// jumpTo opens a job from another folder as if browsed to: the folder
+// behind it is its parent, so back goes there.
+func (m Model) jumpTo(job jenkins.Job) (tea.Model, tea.Cmd) {
+	m.clearFilter()
+	dest := job.Path
+	if !job.IsFolder() {
+		dest = job.Path[:len(job.Path)-1]
+		m.jobs.selectAfter = job.Name
+	}
+	m.jobs.path = append([]string{}, dest...)
+	m.jobs.cursors = make([]int, len(dest))
+	m.jobs.cursor = 0
+	m.jobs.items = nil
+	m.jobs.loading = true
+	load := m.loadJobs(m.jobs.path)
+	if job.IsFolder() {
+		return m, load
+	}
+	m2, cmd := m.openBuilds(job)
+	return m2, tea.Batch(cmd, load)
+}
+
+// handleLastBuild finishes L (open the last log) and x (abort it) from the
+// jobs screen.
+func (m Model) handleLastBuild(msg lastBuildMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.setErr(msg.err)
+		return m, nil
+	}
+	b, job := msg.build, msg.job
+	switch {
+	case b == nil:
+		m.setStatus(job.FullName()+" has never been built", true)
+		return m, nil
+	case msg.action == "abort" && !b.Building:
+		m.setStatus(fmt.Sprintf("%s #%d is not running", job.FullName(), b.Number), true)
+		return m, nil
+	case msg.action == "abort":
+		m.confirm = &confirmState{
+			prompt: fmt.Sprintf("Abort %s #%d?", job.FullName(), b.Number),
+			onYes:  m.abort(job, b.Number),
+		}
+		return m, nil
+	}
+	if m.builds.job.FullName() != job.FullName() {
+		m.builds = buildsState{job: job}
+	}
+	return m.openLog(b.Number)
 }
 
 func (m Model) togglePin(job jenkins.Job) (tea.Model, tea.Cmd) {
 	on := m.cfg.TogglePin(job.FullName())
 	if err := m.cfg.Save(); err != nil {
+		m.cfg.TogglePin(job.FullName()) // undo, so the screen matches the file
 		m.setErr(fmt.Errorf("saving pins: %w", err))
 		return m, nil
 	}
@@ -1175,6 +1436,9 @@ func (m Model) paramsKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) submitParams() (tea.Model, tea.Cmd) {
 	p := m.params
 	job, vals := p.job, p.values()
+	if p.forMacro {
+		return m.saveBuildStep(job, p.macroStep, vals)
+	}
 	back := func() tea.Msg { return backToBuildsMsg{} }
 	if in := p.input; in != nil {
 		m.confirm = &confirmState{

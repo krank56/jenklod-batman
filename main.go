@@ -31,6 +31,9 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	if len(os.Args) > 1 && os.Args[1] == "run" {
+		return runMacro(defPath, os.Args[2:])
+	}
 	var (
 		cfgPath     = flag.String("config", defPath, "config file")
 		noAnim      = flag.Bool("no-anim", false, "skip the splash and keep the cat still")
@@ -38,6 +41,10 @@ func run() error {
 		forget      = flag.Bool("forget-token", false, "remove the stored token from the keyring and exit")
 		showVersion = flag.Bool("version", false, "print the version and exit")
 	)
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage: jenklod-batman [flags]\n       jenklod-batman run <macro> [KEY=VALUE…] [-y]   (run --list to list)\n\nFlags:\n")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 
 	if *showVersion {

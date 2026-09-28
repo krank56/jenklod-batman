@@ -1,0 +1,29 @@
+# Config for the docs recordings, against `go run ./cmd/demo-jenkins`.
+# The token comes from $JENKINS_TOKEN (any value works).
+url = "http://127.0.0.1:8765"
+user = "bruce"
+poll_seconds = 5
+
+[servers."http://127.0.0.1:8765"]
+pinned = ["gotham/deploy", "gotham/batcave-backup", "arkham/cell-audit"]
+
+[[servers."http://127.0.0.1:8765".macros]]
+name = "ship"
+
+[[servers."http://127.0.0.1:8765".macros.steps]]
+kind = "abort"
+job = "gotham/deploy"
+
+[[servers."http://127.0.0.1:8765".macros.steps]]
+kind = "build"
+job = "gotham/deploy"
+with_params = true
+params = { ENV = "staging", DRY_RUN = "false", VERSION = "v2.7.1" }
+
+[[servers."http://127.0.0.1:8765".macros.steps]]
+kind = "input"
+job = "gotham/deploy"
+
+[[servers."http://127.0.0.1:8765".macros.steps]]
+kind = "wait"
+job = "gotham/deploy"

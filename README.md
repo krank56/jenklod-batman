@@ -99,7 +99,7 @@ A macro is a named list of steps, built in the TUI: press `m`, then `n`.
 | build | Triggers a job with saved parameter values, filled in through the job's own parameter form. Password parameters are never saved; Jenkins uses their default. |
 | abort | Aborts the job's running build. |
 | wait | Waits for the build to finish and fails unless it succeeded. The timeout is per step, 30 minutes by default; a timeout leaves the build running. |
-| input | Waits for the build to reach an input step, then proceeds with its default values, or aborts it. Same timeout. |
+| input | Proceeds with the input step's default values, or aborts it. After a build step on the same job, it waits for the pipeline to reach the input (same timeout), and fails if the build ends without asking. Otherwise it checks once: if nothing is running or nothing is waiting, the step is skipped and the macro goes on. |
 
 Abort, wait and input act on the build an earlier step of the same macro started. If there isn't one, they use the job's newest running build. The macro stops at the first step that fails.
 

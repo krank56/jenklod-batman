@@ -22,6 +22,7 @@ type fake struct {
 	calls     []string
 	triggered map[string]string
 	running41 bool
+	waiting41 bool
 	started   bool
 	polls42   int
 	answered  bool
@@ -42,6 +43,14 @@ func (f *fake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"name":"deploy","buildable":true,"builds":[{"number":41,"building":` + boolStr(f.running41) + `}]}`))
 	case "/job/gotham/job/deploy/41/api/json":
 		w.Write([]byte(`{"number":41,"building":` + boolStr(f.running41) + `}`))
+	case "/job/gotham/job/deploy/41/wfapi/pendingInputActions":
+		if f.waiting41 {
+			w.Write([]byte(`[{"id":"Ok","message":"Continue?","proceedText":"Go","inputs":[]}]`))
+			return
+		}
+		w.Write([]byte(`[]`))
+	case "/job/gotham/job/deploy/41/input/Ok/proceedEmpty":
+		f.waiting41 = false
 	case "/job/gotham/job/deploy/41/stop":
 		f.running41 = false
 	case "/job/gotham/job/deploy/buildWithParameters":
@@ -162,5 +171,42 @@ func TestCheckOverrides(t *testing.T) {
 	}
 	if err := CheckOverrides(m, map[string]string{"EVN": "prod"}); err == nil {
 		t.Error("a typo must be rejected")
+	}
+}
+
+func TestUnchainedInputLooksOnceAndSkips(t *testing.T) {
+	steps := []config.Step{
+		{Kind: config.StepInput, Job: "gotham/deploy"},
+		{Kind: config.StepBuild, Job: "gotham/deploy", WithParams: true},
+	}
+	cases := []struct {
+		name               string
+		running, waiting   bool
+		wantCall, wantText string
+	}{
+		{"nothing running", false, false, "", "has no running build — skipped"},
+		{"running, no input", true, false, "", "#41 is not waiting for input — skipped"},
+		{"running, waiting", true, true, "/job/gotham/job/deploy/41/input/Ok/proceedEmpty", "Go at \"Continue?\""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := &fake{running41: c.running, waiting41: c.waiting}
+			r, events := newRunner(t, f)
+			if err := r.Run(context.Background(), config.Macro{Name: "m", Steps: steps}, nil); err != nil {
+				t.Fatal(err)
+			}
+			if !f.started {
+				t.Error("the macro did not go on to the build step")
+			}
+			if c.wantCall != "" && (len(f.calls) == 0 || f.calls[0] != c.wantCall) {
+				t.Errorf("calls = %v", f.calls)
+			}
+			if c.wantCall == "" && len(f.calls) != 1 { // just the build
+				t.Errorf("calls = %v", f.calls)
+			}
+			if got := (*events)[1].Text; !strings.Contains(got, c.wantText) {
+				t.Errorf("event = %q, want %q", got, c.wantText)
+			}
+		})
 	}
 }

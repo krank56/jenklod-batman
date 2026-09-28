@@ -178,6 +178,8 @@ func (r *run) build(ctx context.Context, s config.Step, path []string, overrides
 	}
 }
 
+var errNoRunning = errors.New("has no running build")
+
 // target is the build started earlier in this run, else the job's newest
 // running build.
 func (r *run) target(ctx context.Context, job string, path []string) (int, error) {
@@ -193,7 +195,7 @@ func (r *run) target(ctx context.Context, job string, path []string) (int, error
 			return b.Number, nil
 		}
 	}
-	return 0, fmt.Errorf("%s has no running build", job)
+	return 0, fmt.Errorf("%s %w", job, errNoRunning)
 }
 
 func (r *run) wait(ctx context.Context, s config.Step, path []string) error {
@@ -223,11 +225,28 @@ func (r *run) wait(ctx context.Context, s config.Step, path []string) error {
 	}
 }
 
-// input waits for the build to reach an input step, then answers the first
-// one with its default values.
+// errNoInput skips an input step that has nothing to answer.
+var errNoInput = errors.New("no pending input")
+
+// input answers the first pending input step with its default values. On a
+// build this macro started, it waits for the pipeline to get there. Unchained,
+// it looks once: nothing running or nothing pending skips the step.
 func (r *run) input(ctx context.Context, s config.Step, path []string) error {
+	_, chained := r.chained[s.Job]
 	n, err := r.target(ctx, s.Job, path)
 	if err != nil {
+		if !chained && errors.Is(err, errNoRunning) {
+			r.report("⏭ " + s.Job + " has no running build — skipped")
+			return nil
+		}
+		return err
+	}
+	if !chained {
+		err := r.answer(ctx, s, path, n)
+		if errors.Is(err, errNoInput) {
+			r.report(fmt.Sprintf("⏭ %s #%d is not waiting for input — skipped", s.Job, n))
+			return nil
+		}
 		return err
 	}
 	deadline := time.Now().Add(time.Duration(s.Timeout()) * time.Minute)
@@ -240,19 +259,7 @@ func (r *run) input(ctx context.Context, s config.Step, path []string) error {
 			return err
 		}
 		if len(ins) > 0 {
-			in := ins[0]
-			if s.Abort {
-				if err := r.Client.AbortInput(ctx, path, n, in.ID); err != nil {
-					return err
-				}
-				r.report(fmt.Sprintf("✋ %s #%d aborted at %q", s.Job, n, in.Message))
-				return nil
-			}
-			if err := r.Client.ProceedInput(ctx, path, n, in, defaults(in.Params)); err != nil {
-				return err
-			}
-			r.report(fmt.Sprintf("▶ %s #%d: %s at %q", s.Job, n, in.ProceedText, in.Message))
-			return nil
+			return r.respond(ctx, s, path, n, ins[0])
 		}
 		b, err := r.Client.Build(ctx, path, n)
 		if err != nil {
@@ -268,6 +275,36 @@ func (r *run) input(ctx context.Context, s config.Step, path []string) error {
 			return err
 		}
 	}
+}
+
+// answer responds to the pending input of build n, or returns errNoInput.
+func (r *run) answer(ctx context.Context, s config.Step, path []string, n int) error {
+	ins, err := r.Client.PendingInputs(ctx, path, n)
+	if errors.Is(err, jenkins.ErrNotFound) {
+		return errors.New("can't list input steps: Jenkins lacks the Pipeline Stage View plugin")
+	}
+	if err != nil {
+		return err
+	}
+	if len(ins) == 0 {
+		return errNoInput
+	}
+	return r.respond(ctx, s, path, n, ins[0])
+}
+
+func (r *run) respond(ctx context.Context, s config.Step, path []string, n int, in jenkins.InputRequest) error {
+	if s.Abort {
+		if err := r.Client.AbortInput(ctx, path, n, in.ID); err != nil {
+			return err
+		}
+		r.report(fmt.Sprintf("✋ %s #%d aborted at %q", s.Job, n, in.Message))
+		return nil
+	}
+	if err := r.Client.ProceedInput(ctx, path, n, in, defaults(in.Params)); err != nil {
+		return err
+	}
+	r.report(fmt.Sprintf("▶ %s #%d: %s at %q", s.Job, n, in.ProceedText, in.Message))
+	return nil
 }
 
 func defaults(params []jenkins.Param) map[string]string {

@@ -119,7 +119,7 @@ func (m Model) macroEditView(h int) string {
 		} {
 			b.WriteString("  " + sKey.Render(k[0]) + "  " + k[1] + "\n")
 		}
-		b.WriteString("\n" + sDim.Render("Abort, wait and input act on the build an earlier step of this macro started,\nelse on the job's newest running build."))
+		b.WriteString("\n" + sDim.Render("Abort, wait and input act on the build an earlier step of this macro started,\nelse on the job's newest running build. An input step with no earlier build step on\nits job checks once and is skipped if nothing is waiting."))
 		return b.String()
 	case editPick:
 		b.WriteString(sLabel.Render("Step: "+e.kind) + "\n" + e.pick.View() + "\n")

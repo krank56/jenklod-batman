@@ -5,6 +5,8 @@ A terminal UI for managing Jenkins jobs. It has a bat-signal splash screen and a
 ## Install
 
 ```sh
+brew install krank56/tap/jenklod-batman
+# or
 go install github.com/krank56/jenklod-batman@latest
 ```
 

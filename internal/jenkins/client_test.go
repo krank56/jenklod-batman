@@ -2,6 +2,7 @@ package jenkins
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -192,5 +193,64 @@ func TestAttachInputsWithoutStageView(t *testing.T) {
 	ok, err := c.AttachInputs(context.Background(), []string{"deploy"}, builds)
 	if ok || err != nil {
 		t.Errorf("ok=%v err=%v", ok, err)
+	}
+}
+
+func TestAllJobsWalksNestedFolders(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if tree := r.URL.Query().Get("tree"); strings.Count(tree, "jobs[") != treeDepth {
+			t.Errorf("tree = %s", tree)
+		}
+		w.Write([]byte(`{"jobs":[
+			{"_class":"com.cloudbees.hudson.plugins.folder.Folder","name":"gotham","jobs":[
+				{"_class":"com.cloudbees.hudson.plugins.folder.Folder","name":"cave","jobs":[
+					{"_class":"hudson.model.FreeStyleProject","name":"backup","color":"blue"}]}]},
+			{"_class":"hudson.model.FreeStyleProject","name":"lint","color":"red"}]}`))
+	})
+	jobs, err := c.AllJobs(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, j := range jobs {
+		names = append(names, j.FullName())
+	}
+	if got := strings.Join(names, ","); got != "gotham,gotham/cave,gotham/cave/backup,lint" {
+		t.Errorf("jobs = %s", got)
+	}
+}
+
+func TestTriggerQueuedFollowsTheQueue(t *testing.T) {
+	polls := 0
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/job/deploy/build":
+			w.Header().Set("Location", "http://ci/queue/item/77/")
+			w.WriteHeader(http.StatusCreated)
+		case "/queue/item/77/api/json":
+			if polls++; polls == 1 {
+				w.Write([]byte(`{"cancelled":false}`))
+				return
+			}
+			w.Write([]byte(`{"executable":{"number":12}}`))
+		case "/queue/item/78/api/json":
+			w.Write([]byte(`{"cancelled":true}`))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	ctx := context.Background()
+	id, err := c.TriggerQueued(ctx, []string{"deploy"}, nil)
+	if err != nil || id != 77 {
+		t.Fatalf("id = %d, err = %v", id, err)
+	}
+	if n, err := c.QueuedBuild(ctx, 77); n != 0 || err != nil {
+		t.Errorf("still queued: n = %d, err = %v", n, err)
+	}
+	if n, err := c.QueuedBuild(ctx, 77); n != 12 || err != nil {
+		t.Errorf("started: n = %d, err = %v", n, err)
+	}
+	if _, err := c.QueuedBuild(ctx, 78); !errors.Is(err, ErrQueueCancelled) {
+		t.Errorf("cancelled: err = %v", err)
 	}
 }

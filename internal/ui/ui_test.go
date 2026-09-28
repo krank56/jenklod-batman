@@ -29,6 +29,14 @@ type fakeJenkins struct {
 func (f *fakeJenkins) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/api/json":
+		if strings.Contains(r.URL.Query().Get("tree"), "jobs[name,color,jobs[") {
+			w.Write([]byte(`{"jobs":[
+				{"_class":"com.cloudbees.hudson.plugins.folder.Folder","name":"gotham","jobs":[
+					{"_class":"org.jenkinsci.plugins.workflow.job.WorkflowJob","name":"deploy","color":"red_anime"},
+					{"_class":"org.jenkinsci.plugins.workflow.job.WorkflowJob","name":"batcave-backup","color":"yellow"}]},
+				{"_class":"hudson.model.FreeStyleProject","name":"batmobile-lint","color":"blue"}]}`))
+			return
+		}
 		w.Write([]byte(`{"jobs":[
 			{"_class":"com.cloudbees.hudson.plugins.folder.Folder","name":"gotham"},
 			{"_class":"hudson.model.FreeStyleProject","name":"batmobile-lint","color":"blue"}]}`))
@@ -38,7 +46,10 @@ func (f *fakeJenkins) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			{"_class":"org.jenkinsci.plugins.workflow.job.WorkflowJob","name":"batcave-backup","color":"yellow"}]}`))
 	case "/job/gotham/job/deploy/api/json":
 		now := time.Now().UnixMilli()
-		w.Write([]byte(`{"name":"deploy","buildable":true,"builds":[
+		w.Write([]byte(`{"name":"deploy","buildable":true,
+			"lastBuild":{"number":42,"building":true,"timestamp":` + itoa(now-60000) + `,"estimatedDuration":120000,
+			 "actions":[{"causes":[{"shortDescription":"Started by user Bruce Wayne"}]}]},
+			"builds":[
 			{"number":42,"building":true,"timestamp":` + itoa(now-60000) + `,"estimatedDuration":120000,
 			 "actions":[{"causes":[{"shortDescription":"Started by user Bruce Wayne"}]}]},
 			{"number":41,"result":"FAILURE","duration":93000,"timestamp":` + itoa(now-3600000) + `,
@@ -75,7 +86,10 @@ func (f *fakeJenkins) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.triggered = map[string]string{"ENV": r.PostForm.Get("ENV"), "DRY_RUN": r.PostForm.Get("DRY_RUN")}
 		f.mu.Unlock()
+		w.Header().Set("Location", "http://"+r.Host+"/queue/item/9/")
 		w.WriteHeader(http.StatusCreated)
+	case "/queue/item/9/api/json":
+		w.Write([]byte(`{"executable":{"number":43}}`))
 	default:
 		http.NotFound(w, r)
 	}
@@ -247,7 +261,7 @@ func TestFlow(t *testing.T) {
 
 func TestWatchNotifiesOnFinish(t *testing.T) {
 	cfg, _ := config.Load(filepath.Join(t.TempDir(), "config.toml"))
-	cfg.Pinned = []string{"gotham/deploy"}
+	cfg.TogglePin("gotham/deploy")
 	m := New(Options{Config: cfg, NoAnim: true})
 	if cmd := m.handleWatch(watchResultMsg{name: "gotham/deploy", build: &jenkins.Build{Number: 5, Building: true}}); cmd != nil {
 		t.Error("first sighting must not notify")
@@ -326,7 +340,7 @@ func TestInputFlow(t *testing.T) {
 
 func TestWatchNotifiesOnInputOnce(t *testing.T) {
 	cfg, _ := config.Load(filepath.Join(t.TempDir(), "config.toml"))
-	cfg.Pinned = []string{"gotham/deploy"}
+	cfg.TogglePin("gotham/deploy")
 	m := New(Options{Config: cfg, NoAnim: true})
 	b := &jenkins.Build{Number: 9, Building: true, Inputs: []jenkins.InputRequest{{ID: "Prod", Message: "Deploy to prod?"}}}
 	if m.handleWatch(watchResultMsg{name: "gotham/deploy", build: b}) == nil {

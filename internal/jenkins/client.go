@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -265,6 +266,41 @@ func (c *Client) ListJobs(ctx context.Context, path []string) ([]Job, error) {
 	return jobs, nil
 }
 
+// treeDepth is how many folder levels AllJobs descends.
+const treeDepth = 8
+
+// AllJobs lists every job and folder on the controller in one request,
+// depth first, for searching across folders.
+func (c *Client) AllJobs(ctx context.Context) ([]Job, error) {
+	type item struct {
+		Class string `json:"_class"`
+		Name  string `json:"name"`
+		Color string `json:"color"`
+		Jobs  []item `json:"jobs"`
+	}
+	tree := "jobs[name,color]"
+	for range treeDepth - 1 {
+		tree = "jobs[name,color," + tree + "]"
+	}
+	var resp struct {
+		Jobs []item `json:"jobs"`
+	}
+	if err := c.getJSON(ctx, "", tree, &resp); err != nil {
+		return nil, err
+	}
+	var out []Job
+	var walk func(parent []string, items []item)
+	walk = func(parent []string, items []item) {
+		for _, it := range items {
+			p := append(append([]string{}, parent...), it.Name)
+			out = append(out, Job{Name: it.Name, Class: it.Class, Color: it.Color, Path: p})
+			walk(p, it.Jobs)
+		}
+	}
+	walk(nil, resp.Jobs)
+	return out, nil
+}
+
 // Build is one run of a job.
 type Build struct {
 	Number    int
@@ -465,6 +501,12 @@ func (c *Client) crumb(ctx context.Context) {
 }
 
 func (c *Client) post(ctx context.Context, p string, form url.Values) error {
+	_, err := c.postH(ctx, p, form)
+	return err
+}
+
+// postH is post that also returns the response headers.
+func (c *Client) postH(ctx context.Context, p string, form url.Values) (http.Header, error) {
 	c.crumb(ctx)
 	var body io.Reader
 	if form != nil {
@@ -472,7 +514,7 @@ func (c *Client) post(ctx context.Context, p string, form url.Values) error {
 	}
 	req, err := c.newRequest(ctx, http.MethodPost, p, nil, body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if form != nil {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -482,23 +524,79 @@ func (c *Client) post(ctx context.Context, p string, form url.Values) error {
 	}
 	resp, err := c.do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	resp.Body.Close()
-	return nil
+	return resp.Header, nil
 }
 
 // Trigger queues a build. Parameterised jobs must pass their values in
 // params (possibly empty to use every default); others pass nil.
 func (c *Client) Trigger(ctx context.Context, path []string, params map[string]string) error {
+	_, err := c.TriggerQueued(ctx, path, params)
+	return err
+}
+
+var queueItem = regexp.MustCompile(`/queue/item/(\d+)/?$`)
+
+// TriggerQueued is Trigger that also returns the queue item id Jenkins
+// assigned (0 if it did not say), for QueuedBuild.
+func (c *Client) TriggerQueued(ctx context.Context, path []string, params map[string]string) (int, error) {
+	var (
+		h   http.Header
+		err error
+	)
 	if params == nil {
-		return c.post(ctx, jobPath(path)+"/build", nil)
+		h, err = c.postH(ctx, jobPath(path)+"/build", nil)
+	} else {
+		form := url.Values{}
+		for k, v := range params {
+			form.Set(k, v)
+		}
+		h, err = c.postH(ctx, jobPath(path)+"/buildWithParameters", form)
 	}
-	form := url.Values{}
-	for k, v := range params {
-		form.Set(k, v)
+	if err != nil {
+		return 0, err
 	}
-	return c.post(ctx, jobPath(path)+"/buildWithParameters", form)
+	if m := queueItem.FindStringSubmatch(h.Get("Location")); m != nil {
+		id, _ := strconv.Atoi(m[1])
+		return id, nil
+	}
+	return 0, nil
+}
+
+// ErrQueueCancelled means a queued build was cancelled before it started.
+var ErrQueueCancelled = errors.New("the queued build was cancelled")
+
+// QueuedBuild returns the build number a queue item became, or 0 while it
+// is still waiting in the queue.
+func (c *Client) QueuedBuild(ctx context.Context, id int) (int, error) {
+	var resp struct {
+		Cancelled  bool `json:"cancelled"`
+		Executable *struct {
+			Number int `json:"number"`
+		} `json:"executable"`
+	}
+	if err := c.getJSON(ctx, "/queue/item/"+strconv.Itoa(id), "cancelled,executable[number]", &resp); err != nil {
+		return 0, err
+	}
+	if resp.Cancelled {
+		return 0, ErrQueueCancelled
+	}
+	if resp.Executable == nil {
+		return 0, nil
+	}
+	return resp.Executable.Number, nil
+}
+
+// Build fetches one build of a job.
+func (c *Client) Build(ctx context.Context, path []string, number int) (*Build, error) {
+	var resp apiBuild
+	if err := c.getJSON(ctx, jobPath(path)+"/"+strconv.Itoa(number), buildTree, &resp); err != nil {
+		return nil, err
+	}
+	b := resp.toBuild()
+	return &b, nil
 }
 
 // Abort stops a running build.

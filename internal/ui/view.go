@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -41,6 +42,10 @@ func (m Model) View() string {
 			body = m.logView()
 		case scrParams:
 			body = m.paramsView()
+		case scrMacros:
+			body = m.macrosView(bodyH)
+		case scrMacroEdit:
+			body = m.macroEditView(bodyH)
 		}
 	}
 	body = lipgloss.NewStyle().Width(m.w).Height(bodyH).MaxHeight(bodyH).Render(body)
@@ -61,11 +66,21 @@ func (m Model) headerView() string {
 		crumbs = m.builds.job.Path
 	case scrLog:
 		crumbs = append(append([]string{}, m.log.job.Path...), fmt.Sprintf("#%d", m.log.number))
+	case scrMacros:
+		crumbs = []string{"macros"}
+	case scrMacroEdit:
+		crumbs = []string{"macros", m.macroEditTitle()}
+	}
+	if m.scr == scrParams && m.params.forMacro {
+		crumbs = []string{"macros", m.macroEditTitle(), m.params.job.FullName()}
 	}
 	crumb := sCrumb.Render(" " + strings.Join(append([]string{"/"}, crumbs...), " › "))
 	right := ""
-	if n := len(m.cfg.Pinned); n > 0 {
-		right = sPin.Render(fmt.Sprintf("👁 %d watched ", n))
+	if r := m.run; r != nil && !r.done {
+		right = sWait.Render(fmt.Sprintf("▶ %s %d/%d ", r.name, r.step, r.total))
+	}
+	if n := len(m.cfg.Pins()); n > 0 {
+		right += sPin.Render(fmt.Sprintf("👁 %d watched ", n)) + sDim.Render(fmt.Sprintf("⟳%ds ", m.cfg.PollSeconds))
 	}
 	left := title + host + crumb
 	gap := m.w - lipgloss.Width(left) - lipgloss.Width(right)
@@ -84,15 +99,23 @@ func (m Model) footerView() string {
 		add("y", "yes")
 		add("n", "no")
 	case m.scr == scrJobs && m.jobs.filtering:
-		add("enter", "keep filter")
+		add("↑/↓", "move")
+		add("enter", "keep results")
 		add("esc", "clear")
 	case m.scr == scrJobs:
+		r, _ := m.selectedRow()
 		add("↵/l", "open")
 		add("h", "up")
-		add("/", "filter")
+		add("/", "search")
 		add("b", "build")
+		add("L", "last log")
+		add("x", "abort")
 		add("w", "watch")
-		add("o", "browser")
+		if r.pin {
+			add("J/K", "move")
+		}
+		add("m", "macros")
+		add("p", "poll")
 		add("?", "help")
 		add("q", "quit")
 	case m.scr == scrBuilds:
@@ -125,8 +148,25 @@ func (m Model) footerView() string {
 	case m.scr == scrParams:
 		add("tab", "next")
 		add("←/→", "change")
-		add("enter", "build")
+		if m.params.forMacro {
+			add("enter", "save step")
+		} else {
+			add("enter", "build")
+		}
 		add("esc", "cancel")
+	case m.scr == scrMacros:
+		add("↵", "run")
+		add("n", "new")
+		add("e", "edit")
+		add("d", "delete")
+		if m.run != nil && !m.run.done {
+			add("c", "cancel run")
+		}
+		add("h", "back")
+	case m.scr == scrMacroEdit:
+		for _, h := range m.macroEditHints() {
+			add(h[0], h[1])
+		}
 	}
 	line := strings.Join(hints, "  ")
 	if m.status != "" {
@@ -155,44 +195,82 @@ func window(cursor, n, height int) (int, int) {
 
 func (m Model) jobsView(h int) string {
 	var b strings.Builder
-	if m.jobs.filtering || m.jobs.filter.Value() != "" {
-		b.WriteString(m.jobs.filter.View() + "\n")
+	searching := m.jobs.filtering || m.jobs.filter.Value() != ""
+	if searching {
+		line := m.jobs.filter.View()
+		switch {
+		case m.indexLoading:
+			line += sDim.Render("  " + spinner[m.frame%len(spinner)] + " indexing all folders…")
+		case m.indexErr != nil:
+			line += sErr.Render("  other folders unavailable — press r to retry")
+		}
+		b.WriteString(line + "\n")
 		h--
 	}
-	jobs := m.visibleJobs()
+	rows := m.rows()
+	pins := 0
+	for _, r := range rows {
+		if r.pin {
+			pins++
+		}
+	}
+	if pins > 0 {
+		b.WriteString(sPin.Render("◆ WATCHED") + sDim.Render(fmt.Sprintf("  polled every %ds", m.cfg.PollSeconds)) + "\n")
+		h -= 2 // heading + the rule under the last pin
+	}
 	switch {
-	case m.jobs.loading && len(jobs) == 0:
+	case m.jobs.loading && len(rows) == 0:
 		b.WriteString(sKey.Render(spinner[m.frame%len(spinner)]) + sDim.Render(" Scanning Gotham for jobs…"))
 		return b.String()
-	case m.jobs.err != nil && len(jobs) == 0:
+	case m.jobs.err != nil && len(rows) == 0:
 		b.WriteString(sErr.Render("✘ "+m.jobs.err.Error()) + "\n" + sDim.Render("press r to retry"))
 		return b.String()
-	case len(jobs) == 0:
+	case len(rows) == 0 && searching:
+		b.WriteString(sDim.Render("  No job matches, in this folder or any other."))
+		return b.String()
+	case len(rows) == 0:
 		b.WriteString(sDim.Render("  Nothing here. Even the Batcave has empty corners."))
 		return b.String()
 	}
-	start, end := window(m.jobs.cursor, len(jobs), h)
+	pinW := 0
+	for _, r := range rows[:pins] {
+		pinW = max(pinW, lipgloss.Width(r.job.FullName()))
+	}
+	pinW = min(pinW, 40)
+	start, end := window(m.jobs.cursor, len(rows), max(1, h))
 	for i := start; i < end; i++ {
-		j := jobs[i]
+		r := rows[i]
 		sel := i == m.jobs.cursor
 		cur := "  "
 		if sel {
 			cur = sCursor.Render("▌ ")
 		}
+		if r.pin {
+			b.WriteString(cur + m.pinRow(r.job, sel, pinW) + "\n")
+			if i == pins-1 && i+1 < end {
+				b.WriteString(sDim.Render("  "+strings.Repeat("─", max(1, min(m.w-4, 60)))) + "\n")
+			}
+			continue
+		}
 		var icon, name string
-		if j.IsFolder() {
+		if r.job.IsFolder() {
 			icon = sKey.Render("▸")
-			name = j.Name + "/"
+			name = r.job.Name + "/"
 		} else {
-			s, building := jenkins.ColorStatus(j.Color)
+			s, building := jenkins.ColorStatus(r.job.Color)
 			icon = statusIcon(s, building, m.frame)
-			name = j.Name
+			name = r.job.Name
 		}
 		if sel {
 			name = sSelected.Render(name)
 		}
+		if r.other {
+			if parent := r.job.Path[:len(r.job.Path)-1]; len(parent) > 0 {
+				name = sDim.Render(jenkins.JoinPath(parent)+"/") + name
+			}
+		}
 		pin := ""
-		if m.cfg.IsPinned(j.FullName()) {
+		if m.cfg.IsPinned(r.job.FullName()) {
 			pin = " " + sPin.Render("◆")
 		}
 		b.WriteString(cur + icon + " " + name + pin + "\n")
@@ -201,6 +279,46 @@ func (m Model) jobsView(h int) string {
 		b.WriteString(sDim.Render("  " + spinner[m.frame%len(spinner)] + " refreshing"))
 	}
 	return b.String()
+}
+
+// pinRow is a watched job with its last build, as the last poll saw it.
+func (m Model) pinRow(job jenkins.Job, sel bool, nameW int) string {
+	full := job.FullName()
+	name := pad(truncate(full, nameW), nameW)
+	if sel {
+		name = sSelected.Render(name)
+	}
+	st := m.watch[full]
+	switch {
+	case st != nil && st.err != nil:
+		return sErr.Render("✗") + " " + name + "  " + sErr.Render(truncate(pollError(st.err), max(10, m.w-nameW-8)))
+	case st == nil || !st.known:
+		return sDim.Render("·") + " " + name + "  " + sDim.Render("…")
+	case st.last == nil:
+		return sDim.Render("○") + " " + name + "  " + sDim.Render("never built")
+	}
+	bd := *st.last
+	dur := fmtDur(bd.Duration)
+	if bd.Building {
+		dur = progress(time.Since(bd.Started), bd.Estimated)
+	}
+	icon, result := statusIcon(bd.Status(), bd.Building, m.frame), resultText(bd)
+	cause := bd.Cause
+	if len(bd.Inputs) > 0 {
+		icon, result = sWait.Render("⏸"), sWait.Render("INPUT")
+		cause = bd.Inputs[0].Message
+	}
+	used := 2 + 2 + nameW + 2 + 7 + 1 + 10 + 1 + 10 + 1 + 18 + 1
+	return fmt.Sprintf("%s %s  %s %s %s %s %s", icon, name, pad(fmt.Sprintf("#%d", bd.Number), 7),
+		pad(result, 10), pad(fmtAgo(bd.Started), 10), pad(dur, 18), sDim.Render(truncate(cause, max(0, m.w-used))))
+}
+
+// pollError shortens the usual reasons a pin cannot be polled.
+func pollError(err error) string {
+	if errors.Is(err, jenkins.ErrNotFound) {
+		return "not found — deleted or renamed? press w to unwatch"
+	}
+	return strings.ReplaceAll(err.Error(), "\n", " ")
 }
 
 func (m Model) buildsView(h int) string {
@@ -329,6 +447,12 @@ func (m Model) paramsView() string {
 		if len(p.fields) == 0 {
 			b.WriteString("  " + sKey.Render("enter") + " " + p.input.ProceedText + "    " + sKey.Render("x") + " Abort\n")
 		}
+	} else if p.forMacro {
+		b.WriteString(sLabel.Render("Macro step: build "+p.job.FullName()) + sDim.Render(" with these parameters") + "\n")
+		if p.skippedPass > 0 {
+			b.WriteString(sDim.Render(fmt.Sprintf("%d password parameter(s) are not saved in macros; Jenkins uses their default.", p.skippedPass)) + "\n")
+		}
+		b.WriteString("\n")
 	} else {
 		b.WriteString(sLabel.Render("Build "+p.job.FullName()) + sDim.Render(" with parameters") + "\n\n")
 	}
@@ -383,11 +507,15 @@ func (m Model) helpView(h int) string {
 		{"ctrl+d/u", "half page down / up"},
 		{"enter l →", "open folder, job or build log"},
 		{"h ← esc", "back"},
-		{"/", "filter jobs"},
+		{"/", "search this folder, then every other (fuzzy)"},
 		{"b", "build (asks first; form for parameters)"},
 		{"x", "abort a running build (asks first)"},
+		{"L", "open the last build's log (jobs list)"},
 		{"i", "answer a paused pipeline input (proceed / abort)"},
 		{"w", "watch / unwatch job — notifies when builds finish"},
+		{"J/K", "move a watched job down / up"},
+		{"p", "cycle the watch poll interval (saved)"},
+		{"m", "macros: run, create, edit"},
 		{"o", "open in browser"},
 		{"f", "follow log output"},
 		{"r", "refresh"},

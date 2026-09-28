@@ -151,6 +151,14 @@ make test   # Jenkins client and a UI flow against a fake Jenkins
 JB_SNAPSHOTS=/tmp/snap go test ./internal/ui/   # dump rendered screens
 ```
 
+## Releasing
+
+```sh
+git tag -a v0.3.0 -m v0.3.0 && git push origin v0.3.0
+```
+
+The `release` workflow tests, builds the archives (`make dist`) and publishes them. To write the release notes yourself, draft the release before pushing the tag. The Homebrew formula in [krank56/homebrew-tap](https://github.com/krank56/homebrew-tap) updates itself within the hour.
+
 ## License
 
 [MIT](LICENSE)

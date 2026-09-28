@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.png" width="640">
+    <img src="assets/logo-light.png" alt="jenklod-batman: a black cat with bat wings in a yellow spotlight above a >_ prompt" width="200">
+  </picture>
+</p>
+
 # jenklod-batman 🦇
 
 A terminal UI for managing Jenkins jobs. It has a bat-signal splash screen and a cat that lives in the status bar.

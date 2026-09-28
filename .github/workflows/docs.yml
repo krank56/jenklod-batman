@@ -1,4 +1,4 @@
-# Publishes docs/ to GitHub Pages: https://krank56.github.io/jenklod-batman/
+# Publishes docs/ to GitHub Pages: https://jenklod-batman.ytalbi.com/ (custom domain, set in the repo's Pages settings)
 # The recordings in docs/public/media are committed (make docs-media), so
 # this only builds the site.
 name: docs

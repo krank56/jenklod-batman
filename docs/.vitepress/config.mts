@@ -5,18 +5,19 @@ const repo = 'https://github.com/krank56/jenklod-batman'
 export default defineConfig({
   title: 'jenklod-batman',
   description: 'A terminal UI for Jenkins: watched jobs, search across every folder, macros, and pipeline input approvals.',
-  base: '/jenklod-batman/',
+  base: '/',
+  sitemap: { hostname: 'https://jenklod-batman.ytalbi.com' },
   lang: 'en-US',
   cleanUrls: true,
   lastUpdated: true,
   appearance: 'dark',
   srcExclude: ['tapes/**', 'README.md'],
   head: [
-    ['link', { rel: 'icon', type: 'image/png', href: '/jenklod-batman/logo-mark.png' }],
+    ['link', { rel: 'icon', type: 'image/png', href: '/logo-mark.png' }],
     ['meta', { name: 'theme-color', content: '#FFD500' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:title', content: 'jenklod-batman — Jenkins, from the Batcave' }],
-    ['meta', { property: 'og:image', content: 'https://krank56.github.io/jenklod-batman/banner-dark.png' }],
+    ['meta', { property: 'og:image', content: 'https://jenklod-batman.ytalbi.com/banner-dark.png' }],
   ],
   themeConfig: {
     logo: '/logo-mark.png',

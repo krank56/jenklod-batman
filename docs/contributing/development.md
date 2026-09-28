@@ -43,7 +43,7 @@ JENKINS_TOKEN=demo go run . --config /tmp/demo.toml
 ```sh
 cd docs
 npm ci
-npm run dev       # http://localhost:5173/jenklod-batman/
+npm run dev       # http://localhost:5173/
 ```
 
 The screenshots and recordings in `docs/public/media` come from the [vhs](https://github.com/charmbracelet/vhs) scripts in `docs/tapes`, played against the demo Jenkins. Regenerate them after a UI change:

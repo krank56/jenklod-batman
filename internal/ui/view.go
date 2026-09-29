@@ -108,6 +108,7 @@ func (m Model) footerView() string {
 		add("h", "up")
 		add("/", "search")
 		add("b", "build")
+		add("R", "rebuild")
 		add("L", "last log")
 		add("x", "abort")
 		add("w", "watch")
@@ -124,6 +125,7 @@ func (m Model) footerView() string {
 			add("i", "answer input")
 		}
 		add("b", "build")
+		add("R", "rebuild")
 		add("x", "abort")
 		add("w", "watch")
 		add("o", "browser")
@@ -134,6 +136,7 @@ func (m Model) footerView() string {
 		}
 		add("f", "follow")
 		add("g/G", "top/end")
+		add("R", "rebuild")
 		add("x", "abort")
 		add("o", "browser")
 		add("h", "back")
@@ -453,6 +456,8 @@ func (m Model) paramsView() string {
 			b.WriteString(sDim.Render(fmt.Sprintf("%d password parameter(s) are not saved in macros; Jenkins uses their default.", p.skippedPass)) + "\n")
 		}
 		b.WriteString("\n")
+	} else if p.rebuildOf > 0 {
+		b.WriteString(sLabel.Render("Rebuild "+p.job.FullName()) + sDim.Render(fmt.Sprintf(" with the parameters of #%d", p.rebuildOf)) + "\n\n")
 	} else {
 		b.WriteString(sLabel.Render("Build "+p.job.FullName()) + sDim.Render(" with parameters") + "\n\n")
 	}
@@ -509,6 +514,7 @@ func (m Model) helpView(h int) string {
 		{"h ← esc", "back"},
 		{"/", "search this folder, then every other (fuzzy)"},
 		{"b", "build (asks first; form for parameters)"},
+		{"R", "rebuild: the form filled in from the selected or last build"},
 		{"x", "abort a running build (asks first)"},
 		{"L", "open the last build's log (jobs list)"},
 		{"i", "answer a paused pipeline input (proceed / abort)"},

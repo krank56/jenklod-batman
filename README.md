@@ -39,6 +39,7 @@ Prebuilt archives for macOS and Linux (amd64 and arm64) are attached to each [re
 | `h`, `←`, `esc` | back |
 | `/` | search: fuzzy matches in the current folder first, then in every other folder |
 | `b` | build (a form opens for parameterized jobs; always asks y/n) |
+| `R` | rebuild: the build form filled in with the selected build's parameters (the last build's, in the jobs list) |
 | `x` | abort a running build (asks y/n); in the jobs list, the job's last build |
 | `L` | in the jobs list: open the job's last build log |
 | `i` | answer a paused pipeline `input` step, e.g. "Deploy to prod?" |

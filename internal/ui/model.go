@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -105,6 +106,11 @@ type buildsState struct {
 	// pendingBuild opens the build flow once the detail (and so the
 	// parameter definitions) has loaded.
 	pendingBuild bool
+	// pendingRebuild is pendingBuild for R: rebuild build rebuildNum (-1
+	// for the newest), returning to rebuildFrom.
+	pendingRebuild bool
+	rebuildNum     int
+	rebuildFrom    screen
 	// noInputAPI is set when the controller lacks the Stage View API, so
 	// pending input steps cannot be listed.
 	noInputAPI bool
@@ -141,6 +147,8 @@ type paramsState struct {
 	forMacro    bool
 	macroStep   int
 	skippedPass int // password parameters left out of the macro
+
+	rebuildOf int // the build whose values filled the form (R), or 0
 }
 
 type paramField struct {
@@ -223,6 +231,14 @@ type detailMsg struct {
 	err        error
 }
 
+type rebuildMsg struct {
+	job    jenkins.Job
+	number int
+	values map[string]string
+	from   screen
+	err    error
+}
+
 type logInputsMsg struct {
 	gen    int
 	inputs []jenkins.InputRequest
@@ -302,6 +318,16 @@ func (m Model) loadDetail(job jenkins.Job) tea.Cmd {
 		}
 		supported, err := c.AttachInputs(cx, job.Path, d.Builds)
 		return detailMsg{job: job, detail: d, noInputAPI: !supported, err: err}
+	}
+}
+
+func (m Model) loadBuildParams(job jenkins.Job, number int, from screen) tea.Cmd {
+	c := m.client
+	return func() tea.Msg {
+		cx, cancel := ctx()
+		defer cancel()
+		vals, err := c.BuildParams(cx, job.Path, number)
+		return rebuildMsg{job: job, number: number, values: vals, from: from, err: err}
 	}
 }
 
@@ -526,7 +552,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.builds.pendingBuild = false
 			return m.startBuild()
 		}
+		if m.builds.pendingRebuild {
+			m.builds.pendingRebuild = false
+			num := m.builds.rebuildNum
+			if num < 0 {
+				num = 0 // never built
+				if len(msg.detail.Builds) > 0 {
+					num = msg.detail.Builds[0].Number
+				}
+			}
+			return m.startRebuild(num, m.builds.rebuildFrom)
+		}
 		return m, nil
+
+	case rebuildMsg:
+		return m.handleRebuild(msg)
 
 	case backToBuildsMsg:
 		if m.scr == scrParams {
@@ -1030,6 +1070,16 @@ func (m Model) jobsKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		mm := m2.(Model)
 		mm.builds.pendingBuild = true
 		return mm, cmd
+	case "R":
+		if job.IsFolder() {
+			return m, nil
+		}
+		m2, cmd := m.openBuilds(job)
+		mm := m2.(Model)
+		mm.builds.pendingRebuild = true
+		mm.builds.rebuildNum = -1
+		mm.builds.rebuildFrom = scrBuilds
+		return mm, cmd
 	case "L", "x":
 		if job.IsFolder() {
 			return m, nil
@@ -1141,6 +1191,11 @@ func (m Model) buildsKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	b, ok := m.selectedBuild()
 	switch key {
+	case "R":
+		if m.builds.detail == nil {
+			return m, nil
+		}
+		return m.startRebuild(b.Number, scrBuilds) // 0 when there are no builds
 	case "o":
 		num := 0
 		if ok {
@@ -1233,6 +1288,106 @@ func (m Model) startBuild() (tea.Model, tea.Cmd) {
 	return m, textinput.Blink
 }
 
+// startRebuild is R: the build form, filled in with the values build
+// number ran with (0: there is no build, so the defaults), returning to
+// from.
+func (m Model) startRebuild(number int, from screen) (tea.Model, tea.Cmd) {
+	d, job := m.builds.detail, m.builds.job
+	if d == nil {
+		return m, nil
+	}
+	if !d.Buildable {
+		m.setStatus(job.FullName()+" is not buildable (disabled?)", true)
+		return m, nil
+	}
+	for _, p := range d.Params {
+		switch p.Type {
+		case jenkins.ParamPassword, jenkins.ParamFile:
+			kind := "password"
+			if p.Type == jenkins.ParamFile {
+				kind = "file"
+			}
+			m.setStatus(fmt.Sprintf("Can't rebuild %s: Jenkins doesn't return the %s parameter %s — press b", job.FullName(), kind, p.Name), true)
+			return m, nil
+		}
+	}
+	if len(d.Params) == 0 {
+		return m.startBuild()
+	}
+	if number == 0 {
+		m2, cmd := m.startBuild()
+		mm := m2.(Model)
+		mm.params.returnTo = from
+		mm.setStatus(job.FullName()+" has no previous build: using the defaults", false)
+		return mm, cmd
+	}
+	return m, m.loadBuildParams(job, number, from)
+}
+
+// handleRebuild opens the form once the old build's values are in.
+func (m Model) handleRebuild(msg rebuildMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.setErr(fmt.Errorf("reading the parameters of %s #%d: %w", msg.job.FullName(), msg.number, msg.err))
+		return m, nil
+	}
+	d := m.builds.detail
+	if d == nil || msg.job.FullName() != m.builds.job.FullName() || m.scr != msg.from {
+		return m, nil // moved on meanwhile
+	}
+	defs, notes := mergeParams(d.Params, msg.values)
+	m.params = newParams(msg.job, defs)
+	m.params.returnTo = msg.from
+	m.params.rebuildOf = msg.number
+	m.scr = scrParams
+	if len(notes) > 0 {
+		m.setStatus(fmt.Sprintf("Parameters changed since #%d: %s", msg.number, strings.Join(notes, "; ")), true)
+	} else {
+		m.setStatus(fmt.Sprintf("Filled in from #%d", msg.number), false)
+	}
+	return m, textinput.Blink
+}
+
+// mergeParams makes the job's current definitions default to what an old
+// build ran with, where that value still fits. notes says what did not: old
+// parameters gone from the job, values no longer valid, and new parameters
+// left at their default.
+func mergeParams(defs []jenkins.Param, old map[string]string) ([]jenkins.Param, []string) {
+	var dropped, reset, added []string
+	out := make([]jenkins.Param, len(defs))
+	known := map[string]bool{}
+	for i, p := range defs {
+		out[i] = p
+		known[p.Name] = true
+		v, ok := old[p.Name]
+		switch {
+		case !ok:
+			added = append(added, p.Name)
+		case p.Type == jenkins.ParamBool && v != "true" && v != "false",
+			p.Type == jenkins.ParamChoice && len(p.Choices) > 0 && !slices.Contains(p.Choices, v):
+			reset = append(reset, p.Name)
+		default:
+			out[i].Default = v
+		}
+	}
+	for name := range old {
+		if !known[name] {
+			dropped = append(dropped, name)
+		}
+	}
+	slices.Sort(dropped)
+	var notes []string
+	if len(dropped) > 0 {
+		notes = append(notes, "dropped "+strings.Join(dropped, ", "))
+	}
+	if len(reset) > 0 {
+		notes = append(notes, "reset "+strings.Join(reset, ", "))
+	}
+	if len(added) > 0 {
+		notes = append(notes, "new "+strings.Join(added, ", ")+" (default)")
+	}
+	return out, notes
+}
+
 func (m Model) openLog(number int) (tea.Model, tea.Cmd) {
 	m.log.gen++
 	m.log.job = m.builds.job
@@ -1290,6 +1445,14 @@ func (m Model) logKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.openInput(m.log.job, m.log.number, m.log.inputs[0], scrLog)
+	case "R":
+		if m.builds.detail == nil || m.builds.job.FullName() != m.log.job.FullName() {
+			// Opened from the jobs list with L: the detail is not loaded yet.
+			m.builds = buildsState{job: m.log.job, loading: true, pendingRebuild: true,
+				rebuildNum: m.log.number, rebuildFrom: scrLog}
+			return m, m.loadDetail(m.log.job)
+		}
+		return m.startRebuild(m.log.number, scrLog)
 	case "x":
 		if m.log.more {
 			job, num := m.log.job, m.log.number

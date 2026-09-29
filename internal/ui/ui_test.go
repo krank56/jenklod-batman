@@ -57,6 +57,14 @@ func (f *fakeJenkins) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"property":[{"parameterDefinitions":[
 			 {"name":"ENV","type":"ChoiceParameterDefinition","choices":["dev","staging","prod"],"defaultParameterValue":{"value":"dev"}},
 			 {"name":"DRY_RUN","type":"BooleanParameterDefinition","defaultParameterValue":{"value":true}}]}]}`))
+	case "/job/gotham/job/deploy/41/api/json":
+		// OLD has since been removed from the job.
+		w.Write([]byte(`{"actions":[{},{"_class":"hudson.model.ParametersAction","parameters":[
+			{"name":"ENV","value":"staging"},{"name":"DRY_RUN","value":false},{"name":"OLD","value":"x"}]}]}`))
+	case "/job/gotham/job/deploy/42/api/json":
+		// qa is no longer a choice, and DRY_RUN did not exist yet.
+		w.Write([]byte(`{"actions":[{"_class":"hudson.model.ParametersAction","parameters":[
+			{"name":"ENV","value":"qa"}]}]}`))
 	case "/job/gotham/job/deploy/42/logText/progressiveText":
 		// Two chunks, like a real running build.
 		if r.URL.Query().Get("start") == "0" {

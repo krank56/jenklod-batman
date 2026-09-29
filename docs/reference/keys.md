@@ -24,6 +24,7 @@
 |---|---|
 | <kbd>/</kbd> | [Search](/guide/search) this folder, then every other one |
 | <kbd>b</kbd> | Build (asks first; opens the form for parameters) |
+| <kbd>R</kbd> | [Rebuild](/guide/browsing#rebuilding) with the last build's parameters |
 | <kbd>L</kbd> | Open the last build's log |
 | <kbd>x</kbd> | Abort the last build if it's running (asks first) |
 | <kbd>w</kbd> | Watch or stop watching |
@@ -37,6 +38,7 @@
 |---|---|
 | <kbd>enter</kbd> | Open the build's log |
 | <kbd>b</kbd> | Build |
+| <kbd>R</kbd> | [Rebuild](/guide/browsing#rebuilding) with the selected build's parameters |
 | <kbd>x</kbd> | Abort the selected build (asks first) |
 | <kbd>i</kbd> | Answer a pending input |
 | <kbd>w</kbd> | Watch or stop watching |
@@ -50,6 +52,7 @@
 | <kbd>f</kbd> | Toggle following new output |
 | <kbd>g</kbd>/<kbd>G</kbd> | Top / bottom (bottom also resumes following) |
 | <kbd>i</kbd> | Answer a pending input |
+| <kbd>R</kbd> | [Rebuild](/guide/browsing#rebuilding) with this build's parameters |
 | <kbd>x</kbd> | Abort the build (asks first) |
 | <kbd>o</kbd> | Open the console in the browser |
 

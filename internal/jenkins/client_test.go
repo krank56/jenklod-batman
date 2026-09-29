@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -75,6 +76,31 @@ func TestJobDetailParams(t *testing.T) {
 	}
 	if p := d.Params[2]; p.Type != ParamPassword || p.Default != "" {
 		t.Errorf("password default must not be exposed: %+v", p)
+	}
+}
+
+func TestBuildParams(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/job/deploy/7/api/json" || r.URL.Query().Get("tree") != "actions[parameters[name,value]]" {
+			t.Errorf("unexpected %s", r.URL)
+		}
+		w.Write([]byte(`{"actions":[{"causes":[{}]},{"_class":"hudson.model.ParametersAction","parameters":[
+			{"name":"ENV","value":"prod"},{"name":"DRY","value":false},{"name":"PW"}]}]}`))
+	})
+	got, err := c.BuildParams(context.Background(), []string{"deploy"}, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := map[string]string{"ENV": "prod", "DRY": "false"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("params = %v, want %v", got, want)
+	}
+}
+
+func TestParamTypeFile(t *testing.T) {
+	for _, s := range []string{"FileParameterDefinition", "StashedFileParameterDefinition", "Base64FileParameterDefinition"} {
+		if paramType(s) != ParamFile {
+			t.Errorf("%s is not a file parameter", s)
+		}
 	}
 }
 

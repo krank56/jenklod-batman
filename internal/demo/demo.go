@@ -470,11 +470,19 @@ func (s *Server) buildJSON(b *build) map[string]any {
 	if b.result != "" {
 		dur = b.duration
 	}
+	actions := []any{map[string]any{"causes": []any{map[string]string{"shortDescription": b.cause}}}}
+	if len(b.params) > 0 {
+		params := []any{}
+		for _, k := range slices.Sorted(maps.Keys(b.params)) {
+			params = append(params, map[string]string{"name": k, "value": b.params[k]})
+		}
+		actions = append(actions, map[string]any{"_class": "hudson.model.ParametersAction", "parameters": params})
+	}
 	return map[string]any{
 		"number": b.number, "result": result, "building": b.result == "",
 		"duration": int64(dur * 1000), "estimatedDuration": int64(b.duration * 1000),
 		"timestamp": b.started.UnixMilli(),
-		"actions":   []any{map[string]any{"causes": []any{map[string]string{"shortDescription": b.cause}}}},
+		"actions":   actions,
 	}
 }
 

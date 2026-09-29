@@ -327,6 +327,9 @@ const (
 	ParamBool
 	ParamChoice
 	ParamPassword
+	// ParamFile is an uploaded file; the form cannot send one, so it shows
+	// as text, and a rebuild refuses the job.
+	ParamFile
 )
 
 // Param is a build parameter definition.
@@ -348,6 +351,8 @@ func paramType(t string) ParamType {
 		return ParamText
 	case "PasswordParameterDefinition":
 		return ParamPassword
+	case "FileParameterDefinition", "StashedFileParameterDefinition", "Base64FileParameterDefinition":
+		return ParamFile
 	}
 	return ParamString
 }
@@ -597,6 +602,32 @@ func (c *Client) Build(ctx context.Context, path []string, number int) (*Build, 
 	}
 	b := resp.toBuild()
 	return &b, nil
+}
+
+// BuildParams returns the parameter values a build ran with, by name. A
+// build without parameters gives an empty map. Jenkins leaves password
+// values out.
+func (c *Client) BuildParams(ctx context.Context, path []string, number int) (map[string]string, error) {
+	var resp struct {
+		Actions []struct {
+			Parameters []struct {
+				Name  string `json:"name"`
+				Value any    `json:"value"`
+			} `json:"parameters"`
+		} `json:"actions"`
+	}
+	if err := c.getJSON(ctx, jobPath(path)+"/"+strconv.Itoa(number), "actions[parameters[name,value]]", &resp); err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for _, act := range resp.Actions {
+		for _, p := range act.Parameters {
+			if p.Value != nil {
+				out[p.Name] = fmt.Sprint(p.Value)
+			}
+		}
+	}
+	return out, nil
 }
 
 // Abort stops a running build.

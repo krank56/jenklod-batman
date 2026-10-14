@@ -2,13 +2,13 @@
 
 What changed in each release of jenklod-batman. `jk changelog` prints this file, and the first launch after an upgrade shows what's new.
 
-## v0.5.0 (unreleased)
+## v0.5.0 (2026-10-14)
 
 ### Theme music
-- `M` plays *Gotham by Night*, an original keygen-style chiptune in D minor, synthesized as it plays like a C64's SID chip. `M` again stops it. It's off until you turn it on, and saved as `music` in the config, so music left on plays from the next launch.
+- *Gotham by Night*, an original keygen-style chiptune in D minor, plays from launch, synthesized as it plays like a C64's SID chip. `M` stops it and starts it again; the choice is saved as `music` in the config, so `music = false` keeps it quiet.
 - `+` (or `=`) and `-` change its volume in steps of 10% while it plays, saved as `music_volume`.
 - While it plays, the header shows `♫` and the cat dances to the beat.
-- Without a sound device the status bar says *Music unavailable* and the app carries on silently.
+- Without a sound device the app carries on silently. If you turned the music on yourself, the status bar says why it's silent.
 - On Linux, the binary now needs ALSA's `libasound.so.2`, and `go install` needs `libasound2-dev` and a C compiler.
 
 ## v0.4.0 (2026-10-13)

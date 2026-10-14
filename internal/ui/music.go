@@ -35,9 +35,12 @@ func (m Model) musicStarted(msg musicMsg) (tea.Model, tea.Cmd) {
 		m.music.Stop()
 	case msg.err != nil:
 		// The config keeps music on: next time, on a machine with sound,
-		// it plays.
+		// it plays. Only music asked for says why it's silent; the
+		// default stays quiet on headless machines.
 		m.musicOn = false
-		m.setStatus("♫ Music unavailable: "+msg.err.Error(), true)
+		if m.cfg.Music != nil {
+			m.setStatus("♫ Music unavailable: "+msg.err.Error(), true)
+		}
 	default:
 		m.playing = true
 	}
@@ -52,7 +55,7 @@ func (m Model) toggleMusic() (tea.Model, tea.Cmd) {
 	}
 	on := !m.musicOn
 	prev := m.cfg.Music
-	m.cfg.Music = on
+	m.cfg.SetMusic(on)
 	if err := m.cfg.Save(); err != nil {
 		m.cfg.Music = prev
 		m.setErr(fmt.Errorf("saving music setting: %w", err))

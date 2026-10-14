@@ -563,7 +563,7 @@ func (m Model) helpView(h int) string {
 		{"f", "follow log output"},
 		{"r", "refresh"},
 		{"a", "toggle the cat"},
-		{"M", "Gotham theme music on / off (saved)"},
+		{"M", "Gotham theme music off / on (saved)"},
 		{"+/-", "music volume, while it plays (saved)"},
 		{"q", "back / quit"},
 	}

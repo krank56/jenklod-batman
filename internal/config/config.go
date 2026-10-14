@@ -29,10 +29,10 @@ type Config struct {
 	PollSeconds int    `toml:"poll_seconds"`
 	// CheckUpdates turns the daily check for a new release off when false.
 	CheckUpdates *bool `toml:"check_updates,omitempty"`
-	// Music plays the Gotham theme (M in the TUI). MusicVolume is 0 to
-	// 100; unset means DefaultVolume.
-	Music       bool `toml:"music,omitempty"`
-	MusicVolume *int `toml:"music_volume,omitempty"`
+	// Music turns the Gotham theme (M in the TUI) off when false; it
+	// plays by default. MusicVolume is 0 to 100; unset means DefaultVolume.
+	Music       *bool `toml:"music,omitempty"`
+	MusicVolume *int  `toml:"music_volume,omitempty"`
 	// Pinned is the pre-0.2 list of pins, not tied to a controller. Load
 	// moves it into Servers; it is kept only to read old files.
 	Pinned []string `toml:"pinned,omitempty"`
@@ -89,6 +89,12 @@ func Load(path string) (*Config, error) {
 
 // UpdatesOn reports whether the TUI checks for new releases (the default).
 func (c *Config) UpdatesOn() bool { return c.CheckUpdates == nil || *c.CheckUpdates }
+
+// MusicOn reports whether the theme plays (the default).
+func (c *Config) MusicOn() bool { return c.Music == nil || *c.Music }
+
+// SetMusic turns the theme on or off.
+func (c *Config) SetMusic(on bool) { c.Music = &on }
 
 // Volume is the music volume in percent.
 func (c *Config) Volume() int {

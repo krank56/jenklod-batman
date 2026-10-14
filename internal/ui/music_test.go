@@ -58,40 +58,59 @@ func startWithMusic(t *testing.T, cfg *config.Config, fm *fakeMusic) Model {
 	return drive(t, m, tea.WindowSizeMsg{Width: 120, Height: 30})
 }
 
+func TestMusicPlaysByDefault(t *testing.T) {
+	cfg := newCfg(t)
+	fm := &fakeMusic{}
+	m := startWithMusic(t, cfg, fm)
+	if !fm.playing || !m.playing || fm.volume != config.DefaultVolume {
+		t.Fatalf("fresh config: player %v, model %v, volume %d", fm.playing, m.playing, fm.volume)
+	}
+	if v := snapshot(t, "30-music", m); !strings.Contains(v, "♫") {
+		t.Errorf("no music marker:\n%s", v)
+	}
+	if cfg.Music != nil {
+		t.Error("playing by default wrote the setting")
+	}
+}
+
 func TestMusicToggle(t *testing.T) {
 	cfg := newCfg(t)
 	fm := &fakeMusic{}
 	m := startWithMusic(t, cfg, fm)
-	if fm.plays != 0 || strings.Contains(m.View(), "♫") {
-		t.Fatal("music plays before M")
+
+	m = drive(t, m, key("M"))
+	if fm.playing || m.playing || cfg.MusicOn() || strings.Contains(m.headerView(), "♫") {
+		t.Fatalf("after M: player %v, model %v, config %v", fm.playing, m.playing, cfg.MusicOn())
+	}
+	if saved, _ := config.Load(cfg.Path()); saved.MusicOn() {
+		t.Error("music=false not saved")
 	}
 
 	m = drive(t, m, key("M"))
-	if !fm.playing || !m.playing || !cfg.Music {
-		t.Fatalf("after M: player %v, model %v, config %v", fm.playing, m.playing, cfg.Music)
+	if !fm.playing || !m.playing || !cfg.MusicOn() {
+		t.Fatalf("after second M: player %v, model %v, config %v", fm.playing, m.playing, cfg.MusicOn())
 	}
-	if fm.volume != config.DefaultVolume {
-		t.Errorf("played at volume %d, want %d", fm.volume, config.DefaultVolume)
+	if !strings.Contains(m.View(), "Gotham by night") {
+		t.Errorf("no status:\n%s", m.View())
 	}
-	if v := snapshot(t, "30-music", m); !strings.Contains(v, "♫") || !strings.Contains(v, "Gotham by night") {
-		t.Errorf("no music marker or status:\n%s", v)
-	}
-	if saved, _ := config.Load(cfg.Path()); !saved.Music {
+	if saved, _ := config.Load(cfg.Path()); !saved.MusicOn() || saved.Music == nil {
 		t.Error("music=true not saved")
 	}
+}
 
-	m = drive(t, m, key("M"))
-	if fm.playing || m.playing || cfg.Music {
-		t.Fatalf("after second M: player %v, model %v, config %v", fm.playing, m.playing, cfg.Music)
-	}
-	if saved, _ := config.Load(cfg.Path()); saved.Music {
-		t.Error("music=false not saved")
+func TestMusicOffInConfig(t *testing.T) {
+	cfg := newCfg(t)
+	cfg.SetMusic(false)
+	fm := &fakeMusic{}
+	m := startWithMusic(t, cfg, fm)
+	if fm.plays != 0 || m.playing {
+		t.Error("music=false in config, yet it plays")
 	}
 }
 
 func TestMusicResumesFromConfig(t *testing.T) {
 	cfg := newCfg(t)
-	cfg.Music = true
+	cfg.SetMusic(true)
 	v := 30
 	cfg.MusicVolume = &v
 	fm := &fakeMusic{}
@@ -106,6 +125,7 @@ func TestMusicVolume(t *testing.T) {
 	fm := &fakeMusic{}
 	m := startWithMusic(t, cfg, fm)
 
+	m = drive(t, m, key("M")) // off
 	m = drive(t, m, key("+"))
 	if cfg.Volume() != config.DefaultVolume {
 		t.Errorf("+ changed the volume to %d while silent", cfg.Volume())
@@ -133,7 +153,7 @@ func TestMusicVolume(t *testing.T) {
 
 func TestMusicUnavailableKeepsConfig(t *testing.T) {
 	cfg := newCfg(t)
-	cfg.Music = true
+	cfg.SetMusic(true)
 	fm := &fakeMusic{err: errors.New("no audio device")}
 	m := startWithMusic(t, cfg, fm)
 	if m.playing || strings.Contains(m.headerView(), "♫") {
@@ -142,20 +162,30 @@ func TestMusicUnavailableKeepsConfig(t *testing.T) {
 	if m.status != "♫ Music unavailable: no audio device" || !m.statusErr {
 		t.Errorf("status %q, error %v", m.status, m.statusErr)
 	}
-	if !cfg.Music {
+	if !cfg.MusicOn() {
 		t.Error("a failed start turned music off in the config")
 	}
 
 	// Once the device works, M tries again rather than switching off.
 	fm.err = nil
 	m = drive(t, m, key("M"))
-	if !fm.playing || !m.playing || !cfg.Music {
-		t.Errorf("M after a failure: player %v, model %v, config %v", fm.playing, m.playing, cfg.Music)
+	if !fm.playing || !m.playing || !cfg.MusicOn() {
+		t.Errorf("M after a failure: player %v, model %v, config %v", fm.playing, m.playing, cfg.MusicOn())
+	}
+}
+
+func TestDefaultMusicFailsQuietly(t *testing.T) {
+	cfg := newCfg(t)
+	fm := &fakeMusic{err: errors.New("no audio device")}
+	m := startWithMusic(t, cfg, fm)
+	if m.playing || m.status != "" {
+		t.Errorf("headless default: playing %v, status %q", m.playing, m.status)
 	}
 }
 
 func TestMusicOffWhileStarting(t *testing.T) {
 	cfg := newCfg(t)
+	cfg.SetMusic(false)
 	fm := &fakeMusic{}
 	m := startWithMusic(t, cfg, fm)
 	on, cmd := m.toggleMusic() // M, its command not run yet
@@ -172,7 +202,7 @@ func TestNoMusicInThisBuild(t *testing.T) {
 	m.scr = scrJobs
 	m = drive(t, m, tea.WindowSizeMsg{Width: 120, Height: 30})
 	m = drive(t, m, key("M"))
-	if cfg.Music || !strings.Contains(m.status, "unavailable in this build") {
+	if cfg.Music != nil || !strings.Contains(m.status, "unavailable in this build") {
 		t.Errorf("without a player: config %v, status %q", cfg.Music, m.status)
 	}
 }
@@ -181,8 +211,7 @@ func TestCatDancesToTheBeat(t *testing.T) {
 	cfg := newCfg(t)
 	fm := &fakeMusic{}
 	m := startWithMusic(t, cfg, fm)
-	m.anim = true
-	m = drive(t, m, key("M"))
+	m.anim = true // music plays by default
 	m = drive(t, m, tickMsg{})
 	snapshot(t, "31-cat-dancing", m)
 	x := m.cat.x

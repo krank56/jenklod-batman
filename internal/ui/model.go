@@ -260,7 +260,7 @@ func New(o Options) Model {
 		updates:  o.Updates,
 		whatsNew: o.WhatsNew,
 		music:    o.Music,
-		musicOn:  o.Music != nil && o.Config.Music,
+		musicOn:  o.Music != nil && o.Config.MusicOn(),
 	}
 	m.jobs.filter = fi
 	m.log.follow = true

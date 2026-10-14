@@ -35,7 +35,7 @@ Prebuilt archives for macOS and Linux (amd64 and arm64) are attached to each [re
 - **[Rebuild and branches](https://jenklod-batman.ytalbi.com/guide/browsing#rebuilding):** `R` refills the build form from an earlier build, `ctrl+g` picks a GitHub branch for a parameter, and the new build is followed from the queue into the list.
 - **[Macros](https://jenklod-batman.ytalbi.com/guide/macros):** saved build sequences, run in the TUI or with `jk <name>`. Give one an argument to make it an alias: `jk cvaden-nuxt-staging my-branch`.
 
-- **[Theme music](https://jenklod-batman.ytalbi.com/guide/music):** `M` plays *Gotham by Night*, an original keygen-style chiptune synthesized as it plays. The cat dances.
+- **[Theme music](https://jenklod-batman.ytalbi.com/guide/music):** *Gotham by Night*, an original keygen-style chiptune synthesized as it plays, plays from launch; `M` stops it. The cat dances.
 - **[Updates](https://jenklod-batman.ytalbi.com/guide/install#upgrading):** the header shows when a release is out, `jk update` installs it, and `jk changelog` says what changed.
 
 ## Keys
@@ -60,7 +60,7 @@ Prebuilt archives for macOS and Linux (amd64 and arm64) are attached to each [re
 | `f` | follow log output |
 | `r` | refresh (a job's builds also refresh themselves while one is queued or running) |
 | `a` | toggle the cat animation |
-| `M` | Gotham theme music on/off (saved) |
+| `M` | Gotham theme music off/on, on by default (saved) |
 | `+`/`=`, `-` | music volume, while it plays (saved) |
 | `?` | help |
 | `q` | back / quit |

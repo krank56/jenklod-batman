@@ -3,6 +3,7 @@
 url = "http://127.0.0.1:8765"
 user = "bruce"
 poll_seconds = 5
+music = false # the recordings are silent; spare whoever records them
 
 [servers."http://127.0.0.1:8765"]
 pinned = ["gotham/deploy", "gotham/batcave-backup", "arkham/cell-audit"]

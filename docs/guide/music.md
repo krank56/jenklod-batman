@@ -1,6 +1,6 @@
 # Theme music
 
-Press <kbd>M</kbd> for *Gotham by Night*, a keygen-style chiptune that loops while you watch your builds. <kbd>M</kbd> again stops it.
+*Gotham by Night*, a keygen-style chiptune, plays from launch and loops while you watch your builds. <kbd>M</kbd> stops it, and <kbd>M</kbd> again starts it from the top.
 
 <audio controls preload="none" src="/media/gotham.ogg"></audio>
 
@@ -14,8 +14,8 @@ While it plays, the header shows `♫` and the cat in the status bar stops to da
 
 ## Saved
 
-Music is off until you turn it on. <kbd>M</kbd> and the volume keys save their setting as `music` and `music_volume` in the [config](/reference/config), so music you leave on plays from the next launch.
+Music is on until you turn it off. <kbd>M</kbd> and the volume keys save their setting as `music` and `music_volume` in the [config](/reference/config), so music you stop stays stopped at the next launch.
 
-If there's no sound device, as on a headless server, the status bar says *Music unavailable* and the app carries on silently. The setting stays as it was, ready for a machine with speakers.
+If there's no sound device, as on a headless server, the app carries on silently. If you turned the music on yourself, the status bar also says *Music unavailable* and why. The setting stays as it was, ready for a machine with speakers.
 
 On Linux the music plays through ALSA, which the binary needs installed. See [Install](./install#linux-alsa).

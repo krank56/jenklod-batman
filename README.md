@@ -23,6 +23,8 @@ go install github.com/krank56/jenklod-batman@latest
 
 Homebrew and the release archives also install `jk`, short for `jenklod-batman` and named after the keys that move the cursor. After a `go install`, `alias jk jenklod-batman` (fish) or `alias jk=jenklod-batman` (bash, zsh) does the same.
 
+On Linux the binary needs ALSA's `libasound.so.2` (for the music), and `go install` needs `libasound2-dev` ([install](https://jenklod-batman.ytalbi.com/guide/install#linux-alsa)).
+
 Prebuilt archives for macOS and Linux (amd64 and arm64) are attached to each [release](https://github.com/krank56/jenklod-batman/releases). `jk update` upgrades whichever way you installed it, and the [changelog](CHANGELOG.md) lists what changed. On first launch a setup form asks for your Jenkins URL, user and API token. The token goes to the system keyring, never to disk ([first run](https://jenklod-batman.ytalbi.com/guide/first-run)).
 
 ## Highlights
@@ -33,6 +35,7 @@ Prebuilt archives for macOS and Linux (amd64 and arm64) are attached to each [re
 - **[Rebuild and branches](https://jenklod-batman.ytalbi.com/guide/browsing#rebuilding):** `R` refills the build form from an earlier build, `ctrl+g` picks a GitHub branch for a parameter, and the new build is followed from the queue into the list.
 - **[Macros](https://jenklod-batman.ytalbi.com/guide/macros):** saved build sequences, run in the TUI or with `jk <name>`. Give one an argument to make it an alias: `jk cvaden-nuxt-staging my-branch`.
 
+- **[Theme music](https://jenklod-batman.ytalbi.com/guide/music):** `M` plays *Gotham by Night*, an original keygen-style chiptune synthesized as it plays. The cat dances.
 - **[Updates](https://jenklod-batman.ytalbi.com/guide/install#upgrading):** the header shows when a release is out, `jk update` installs it, and `jk changelog` says what changed.
 
 ## Keys
@@ -57,6 +60,8 @@ Prebuilt archives for macOS and Linux (amd64 and arm64) are attached to each [re
 | `f` | follow log output |
 | `r` | refresh (a job's builds also refresh themselves while one is queued or running) |
 | `a` | toggle the cat animation |
+| `M` | Gotham theme music on/off (saved) |
+| `+`/`=`, `-` | music volume, while it plays (saved) |
 | `?` | help |
 | `q` | back / quit |
 

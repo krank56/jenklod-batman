@@ -1,6 +1,6 @@
 # config.toml
 
-The app writes `~/.config/jenklod-batman/config.toml` itself: the setup form fills it, and pins, poll interval and macros are saved as you change them. You can also edit it by hand while the app is closed. It never contains your token.
+The app writes `~/.config/jenklod-batman/config.toml` itself: the setup form fills it, and pins, poll interval, music and macros are saved as you change them. You can also edit it by hand while the app is closed. It never contains your token.
 
 ```toml
 url = "https://jenkins.example.com"
@@ -40,6 +40,8 @@ timeout_minutes = 45
 | `user` | string | | Your Jenkins user ID. |
 | `poll_seconds` | integer | `10` | How often watched jobs are polled. <kbd>p</kbd> cycles 5, 10, 20, 30, 60. |
 | `check_updates` | boolean | `true` | Check GitHub once a day for a newer release, and show it in the header. See [Upgrading](/guide/install#upgrading). |
+| `music` | boolean | `false` | Play the [theme music](/guide/music) from launch. <kbd>M</kbd> sets it. |
+| `music_volume` | integer | `50` | Music volume, 0 to 100. <kbd>+</kbd> and <kbd>-</kbd> change it in steps of 10. |
 
 ## `[servers."<url>"]`
 

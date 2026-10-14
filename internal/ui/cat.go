@@ -14,6 +14,9 @@ type cat struct {
 	ticks int // ticks left in the current state
 	age   int
 	rng   *rand.Rand
+	// beat is the music's quarter note while it plays, -1 otherwise. The
+	// cat stops to dance to it.
+	beat int
 }
 
 type catState int
@@ -45,6 +48,10 @@ var (
 		{"  /\\_/\\   ", " (=^ω^=)/ "},
 		{"  /\\_/\\   ", " (=^ω^=)\\ "},
 	}
+	catDanceFrames = [][2]string{
+		{"  /\\_/\\ ♪ ", " (=^.^=)/ "},
+		{"   /\\_/\\ ♫", " \\(=^o^=) "},
+	}
 	catSleepFrames = [][2]string{
 		{"  /\\_/\\ z ", " (=-.-=)  "},
 		{"  /\\_/\\ zZ", " (=-.-=)  "},
@@ -53,7 +60,7 @@ var (
 )
 
 func newCat(seed int64) cat {
-	return cat{dir: 1, state: catWalk, ticks: 60, rng: rand.New(rand.NewSource(seed))}
+	return cat{dir: 1, state: catWalk, ticks: 60, rng: rand.New(rand.NewSource(seed)), beat: -1}
 }
 
 // step advances one animation tick within a lane of the given width.
@@ -62,6 +69,9 @@ func (c *cat) step(width int) {
 	maxX := max(width-catWidth, 0)
 	if c.x > maxX {
 		c.x = maxX
+	}
+	if c.beat >= 0 {
+		return
 	}
 	if c.state == catWalk && c.age%2 == 0 {
 		c.x += c.dir
@@ -94,6 +104,9 @@ func (c *cat) step(width int) {
 }
 
 func (c *cat) sprite() [2]string {
+	if c.beat >= 0 {
+		return catDanceFrames[c.beat%len(catDanceFrames)]
+	}
 	switch c.state {
 	case catWalk:
 		frames := catWalkRight

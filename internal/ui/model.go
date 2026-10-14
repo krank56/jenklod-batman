@@ -47,6 +47,7 @@ type Options struct {
 	Command  string          // the name this was run as, for hints; jenklod-batman if empty
 	Updates  *update.Checker // nil: no check for new releases
 	WhatsNew WhatsNew        // shown once at start, if set
+	Music    Music           // nil: no sound in this build
 }
 
 // WhatsNew is the changelog section of a version just upgraded to.
@@ -110,6 +111,12 @@ type Model struct {
 	newVersion string // a newer release, shown in the header
 	updateNote string // its status line, waiting for a free status line
 	whatsNew   WhatsNew
+
+	// musicOn is whether the theme should play this session; playing,
+	// that the device opened and it does.
+	music   Music
+	musicOn bool
+	playing bool
 }
 
 type jobsState struct {
@@ -252,6 +259,8 @@ func New(o Options) Model {
 		branches: map[github.Repo][]github.Branch{},
 		updates:  o.Updates,
 		whatsNew: o.WhatsNew,
+		music:    o.Music,
+		musicOn:  o.Music != nil && o.Config.Music,
 	}
 	m.jobs.filter = fi
 	m.log.follow = true
@@ -605,6 +614,9 @@ func (m Model) Init() tea.Cmd {
 	if m.client != nil {
 		cmds = append(cmds, m.connected()...)
 	}
+	if m.musicOn {
+		cmds = append(cmds, m.startMusic())
+	}
 	return tea.Batch(cmds...)
 }
 
@@ -647,6 +659,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		m.frame++
+		m.cat.beat = -1
+		if m.anim && m.playing {
+			m.cat.beat = m.music.Beat()
+		}
 		if m.anim {
 			m.cat.step(m.w)
 		}
@@ -665,6 +681,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.loadDetail(m.builds.job)
 		}
 		return m, tea.Batch(tick(), cmd)
+
+	case musicMsg:
+		return m.musicStarted(msg)
 
 	case wizardDoneMsg:
 		if msg.err != nil {
@@ -1139,6 +1158,12 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "p":
 		return m.cyclePoll()
+	case "M":
+		return m.toggleMusic()
+	case "+", "=":
+		return m.changeVolume(volumeStep)
+	case "-":
+		return m.changeVolume(-volumeStep)
 	case "m":
 		if m.scr != scrMacros {
 			return m.openMacros()

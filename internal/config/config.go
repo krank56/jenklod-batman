@@ -13,6 +13,9 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+// DefaultVolume is the music volume, in percent, until one is set.
+const DefaultVolume = 50
+
 // DefaultPollSeconds is how often pinned jobs are checked.
 const DefaultPollSeconds = 10
 
@@ -26,6 +29,10 @@ type Config struct {
 	PollSeconds int    `toml:"poll_seconds"`
 	// CheckUpdates turns the daily check for a new release off when false.
 	CheckUpdates *bool `toml:"check_updates,omitempty"`
+	// Music plays the Gotham theme (M in the TUI). MusicVolume is 0 to
+	// 100; unset means DefaultVolume.
+	Music       bool `toml:"music,omitempty"`
+	MusicVolume *int `toml:"music_volume,omitempty"`
 	// Pinned is the pre-0.2 list of pins, not tied to a controller. Load
 	// moves it into Servers; it is kept only to read old files.
 	Pinned []string `toml:"pinned,omitempty"`
@@ -82,6 +89,14 @@ func Load(path string) (*Config, error) {
 
 // UpdatesOn reports whether the TUI checks for new releases (the default).
 func (c *Config) UpdatesOn() bool { return c.CheckUpdates == nil || *c.CheckUpdates }
+
+// Volume is the music volume in percent.
+func (c *Config) Volume() int {
+	if c.MusicVolume == nil {
+		return DefaultVolume
+	}
+	return min(max(*c.MusicVolume, 0), 100)
+}
 
 // Complete reports whether URL and user are set.
 func (c *Config) Complete() bool { return c.URL != "" && c.User != "" }

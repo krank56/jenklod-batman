@@ -88,6 +88,9 @@ func (m Model) headerView() string {
 	if m.newVersion != "" {
 		right += sOK.Render("↑ " + m.newVersion + " ")
 	}
+	if m.playing {
+		right += sTitle.Render("♫ ")
+	}
 	left := title + host + crumb
 	gap := m.w - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 1 {
@@ -560,6 +563,8 @@ func (m Model) helpView(h int) string {
 		{"f", "follow log output"},
 		{"r", "refresh"},
 		{"a", "toggle the cat"},
+		{"M", "Gotham theme music on / off (saved)"},
+		{"+/-", "music volume, while it plays (saved)"},
 		{"q", "back / quit"},
 	}
 	var b strings.Builder

@@ -1,6 +1,9 @@
 # Push a v* tag to publish a release. Its notes are the tag's section of
 # CHANGELOG.md, and the release fails without one. The Homebrew tap
 # (krank56/homebrew-tap) picks the new release up on its own within the hour.
+#
+# Linux builds link ALSA through cgo for the music, so each Linux
+# architecture builds on its own runner; macOS cross-compiles without cgo.
 name: release
 
 on:
@@ -11,8 +14,15 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest # linux/amd64, and both macOS archives
+            platforms: ""
+          - runner: ubuntu-24.04-arm
+            platforms: linux/arm64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,14 +32,50 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
       - run: make vet test
+
+      - name: Build archives
+        env:
+          TAG: ${{ github.ref_name }}
+          PLATFORMS: ${{ matrix.platforms }}
+        run: |
+          if [ -n "$PLATFORMS" ]; then
+            make dist VERSION="$TAG" PLATFORMS="$PLATFORMS"
+          else
+            make dist VERSION="$TAG"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.runner }}
+          path: dist/*.tar.gz
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
 
       - name: Release notes from CHANGELOG.md
         env:
           TAG: ${{ github.ref_name }}
         run: go run . changelog "$TAG" > notes.md
 
-      - run: make dist VERSION=${{ github.ref_name }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+
+      - run: cd dist && shasum -a 256 *.tar.gz > checksums.txt
 
       - name: Publish
         env:

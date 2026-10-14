@@ -44,6 +44,7 @@ export default defineConfig({
           { text: 'Search', link: '/guide/search' },
           { text: 'Pipeline inputs', link: '/guide/inputs' },
           { text: 'Macros', link: '/guide/macros' },
+          { text: 'Theme music', link: '/guide/music' },
         ],
       },
       {

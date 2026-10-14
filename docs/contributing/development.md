@@ -8,6 +8,8 @@ make test         # go test ./...
 make vet
 ```
 
+On Linux, building needs cgo and the ALSA headers for the [theme music](/guide/music): `sudo apt install libasound2-dev` (or `alsa-lib-devel`). macOS needs nothing extra.
+
 ## Layout
 
 | Path | What |
@@ -17,6 +19,7 @@ make vet
 | `internal/config` | `config.toml`: pins, macros, per-controller scoping |
 | `internal/macro` | The macro runner shared by the TUI and the CLI |
 | `internal/ui` | The TUI: model, views, search, macro editor |
+| `internal/music`, `cmd/music-sample` | The theme: its score, the SID-style synthesizer, the player, and the renderer for the docs' sample |
 | `internal/demo`, `cmd/demo-jenkins` | The simulated Jenkins used for the docs and for trying the app |
 | `docs/` | This site (VitePress) |
 
@@ -57,6 +60,12 @@ The screenshots and recordings in `docs/public/media` come from the [vhs](https:
 ```sh
 brew install vhs
 make docs-media   # or: docs/tapes/record.sh tour macros
+```
+
+The music page's sample, `docs/public/media/gotham.ogg`, is the theme rendered offline. Re-render it after changing the score or the synthesizer (needs ffmpeg with libopus):
+
+```sh
+make music-sample
 ```
 
 Each recording starts a fresh demo server and a copy of `docs/tapes/demo.toml`. The outputs are committed, and CI only builds and publishes the site. Pushing to `main` with changes under `docs/` or to `CHANGELOG.md` publishes it.

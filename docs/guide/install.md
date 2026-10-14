@@ -22,6 +22,17 @@ make install        # into ~/go/bin (override with INSTALL_DIR=...)
 
 Each [release](https://github.com/krank56/jenklod-batman/releases) also has prebuilt archives (`jenklod-batman_<version>_<os>_<arch>.tar.gz`) and a `checksums.txt`.
 
+## Linux: ALSA
+
+On Linux, the [theme music](/guide/music) plays through ALSA, so the binary needs its library, `libasound.so.2`, even with the music off. Desktop distributions ship it; a minimal server or container may not:
+
+```sh
+sudo apt install libasound2   # Debian, Ubuntu (libasound2t64 on Ubuntu 24.04+)
+sudo dnf install alsa-lib     # Fedora
+```
+
+`go install` and `make install` on Linux also build against it, with cgo, so they need its headers (`libasound2-dev` or `alsa-lib-devel`) and a C compiler. macOS needs nothing extra.
+
 ## The short name
 
 Homebrew, the release archives and `make install` also install `jk`, a link to `jenklod-batman` named after the keys that move the cursor. These docs use it, and the app's usage lines and hints show whichever name you ran.

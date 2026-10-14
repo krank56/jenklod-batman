@@ -127,3 +127,32 @@ func TestCheckUpdates(t *testing.T) {
 		t.Error("check_updates = false turns it off")
 	}
 }
+
+func TestMusicRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	c, _ := Load(path)
+	if !c.MusicOn() || c.Volume() != DefaultVolume {
+		t.Fatalf("fresh config: music %v, volume %d; want on at %d", c.MusicOn(), c.Volume(), DefaultVolume)
+	}
+	v := 70
+	c.SetMusic(false)
+	c.MusicVolume = &v
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(path)
+	if !strings.Contains(string(b), "music = false") {
+		t.Errorf("off not written:\n%s", b)
+	}
+	again, _ := Load(path)
+	if again.MusicOn() || again.Volume() != 70 {
+		t.Errorf("after save: music %v, volume %d", again.MusicOn(), again.Volume())
+	}
+
+	// Hand-edited out of range: clamped.
+	os.WriteFile(path, []byte("music_volume = 250\n"), 0o600)
+	again, _ = Load(path)
+	if again.Volume() != 100 {
+		t.Errorf("volume 250 read as %d, want 100", again.Volume())
+	}
+}

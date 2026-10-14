@@ -16,6 +16,7 @@ import (
 
 	"github.com/krank56/jenklod-batman/internal/config"
 	"github.com/krank56/jenklod-batman/internal/jenkins"
+	"github.com/krank56/jenklod-batman/internal/music"
 	"github.com/krank56/jenklod-batman/internal/secret"
 	"github.com/krank56/jenklod-batman/internal/ui"
 	"github.com/krank56/jenklod-batman/internal/update"
@@ -120,6 +121,7 @@ func run() error {
 		Command:  cmd,
 		Updates:  updates,
 		WhatsNew: whatsNew,
+		Music:    music.NewPlayer(),
 	})
 	_, err = tea.NewProgram(m, tea.WithAltScreen()).Run()
 	return err

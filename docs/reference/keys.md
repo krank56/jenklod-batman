@@ -14,6 +14,8 @@
 | <kbd>m</kbd> | Macros |
 | <kbd>p</kbd> | Cycle the watch poll interval: 5, 10, 20, 30, 60s (saved) |
 | <kbd>a</kbd> | Toggle the cat's animation |
+| <kbd>M</kbd> | [Theme music](/guide/music) off or on; it plays by default (saved) |
+| <kbd>+</kbd>/<kbd>=</kbd>, <kbd>-</kbd> | Music volume up / down, while it plays (saved) |
 | <kbd>?</kbd> | Help |
 | <kbd>q</kbd> | Back; quit from the jobs screen |
 | <kbd>ctrl+c</kbd> | Quit |

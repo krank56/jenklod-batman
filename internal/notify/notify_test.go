@@ -42,3 +42,15 @@ func TestOtherSystems(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+func TestPlayer(t *testing.T) {
+	if cmd, _ := player("darwin", missing, "a.mp3"); cmd.Args[0] != "afplay" {
+		t.Errorf("darwin: %v", cmd.Args)
+	}
+	if cmd, _ := player("linux", found, "a.mp3"); !slices.Equal(cmd.Args, []string{"/usr/bin/mpg123", "-q", "--", "a.mp3"}) {
+		t.Errorf("linux: %v", cmd.Args)
+	}
+	if _, err := player("linux", missing, "a.mp3"); !errors.Is(err, ErrUnavailable) {
+		t.Errorf("no player: %v", err)
+	}
+}

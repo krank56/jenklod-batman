@@ -40,6 +40,7 @@ timeout_minutes = 45
 | `user` | string | | Your Jenkins user ID. |
 | `poll_seconds` | integer | `10` | How often watched jobs are polled. <kbd>p</kbd> cycles 5, 10, 20, 30, 60. |
 | `check_updates` | boolean | `true` | Check GitHub once a day for a newer release, and show it in the header. See [Upgrading](/guide/install#upgrading). |
+| `splash_music` | string | | An audio file played at startup until it ends or you quit, e.g. the Batman theme. Needs `afplay` (macOS), `mpg123` or `ffplay`. Skipped with `--no-anim`. |
 
 ## `[servers."<url>"]`
 

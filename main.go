@@ -16,6 +16,7 @@ import (
 
 	"github.com/krank56/jenklod-batman/internal/config"
 	"github.com/krank56/jenklod-batman/internal/jenkins"
+	"github.com/krank56/jenklod-batman/internal/notify"
 	"github.com/krank56/jenklod-batman/internal/secret"
 	"github.com/krank56/jenklod-batman/internal/ui"
 	"github.com/krank56/jenklod-batman/internal/update"
@@ -121,6 +122,9 @@ func run() error {
 		Updates:  updates,
 		WhatsNew: whatsNew,
 	})
+	if !*noAnim {
+		defer notify.Play(cfg.SplashMusic)()
+	}
 	_, err = tea.NewProgram(m, tea.WithAltScreen()).Run()
 	return err
 }

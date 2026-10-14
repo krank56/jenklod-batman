@@ -26,6 +26,9 @@ type Config struct {
 	PollSeconds int    `toml:"poll_seconds"`
 	// CheckUpdates turns the daily check for a new release off when false.
 	CheckUpdates *bool `toml:"check_updates,omitempty"`
+	// SplashMusic is an audio file played at startup, until it ends or
+	// the app quits.
+	SplashMusic string `toml:"splash_music,omitempty"`
 	// Pinned is the pre-0.2 list of pins, not tied to a controller. Load
 	// moves it into Servers; it is kept only to read old files.
 	Pinned []string `toml:"pinned,omitempty"`

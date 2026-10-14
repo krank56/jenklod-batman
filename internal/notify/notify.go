@@ -53,3 +53,27 @@ func Open(url string) error {
 	}
 	return exec.Command(name, url).Start()
 }
+
+// Play starts an audio file in the background with the system player and
+// returns a func that stops it. A missing file or player plays nothing.
+func Play(path string) (stop func()) {
+	cmd, err := player(runtime.GOOS, exec.LookPath, path)
+	if path == "" || err != nil || cmd.Start() != nil {
+		return func() {}
+	}
+	go cmd.Wait()
+	return func() { cmd.Process.Kill() }
+}
+
+func player(goos string, lookPath func(string) (string, error), path string) (*exec.Cmd, error) {
+	if goos == "darwin" {
+		return exec.Command("afplay", path), nil
+	}
+	if p, err := lookPath("mpg123"); err == nil {
+		return exec.Command(p, "-q", "--", path), nil
+	}
+	if p, err := lookPath("ffplay"); err == nil {
+		return exec.Command(p, "-nodisp", "-autoexit", "-loglevel", "quiet", path), nil
+	}
+	return nil, ErrUnavailable
+}

@@ -29,7 +29,11 @@ run: build
 # architecture. macOS needs no cgo and builds anywhere.
 HOST_OS := $(shell go env GOOS)
 HOST_ARCH := $(shell go env GOARCH)
-PLATFORMS ?= darwin/amd64 darwin/arm64 $(if $(filter linux,$(HOST_OS)),linux/$(HOST_ARCH))
+# An empty PLATFORMS, as the release workflow's environment may pass,
+# means the default too.
+ifeq ($(strip $(PLATFORMS)),)
+PLATFORMS := darwin/amd64 darwin/arm64 $(if $(filter linux,$(HOST_OS)),linux/$(HOST_ARCH))
+endif
 dist:
 	rm -rf dist && mkdir -p dist
 	@for p in $(PLATFORMS); do \

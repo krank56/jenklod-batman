@@ -63,8 +63,11 @@ func (f *fakeJenkins) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			{"name":"ENV","value":"staging"},{"name":"DRY_RUN","value":false},{"name":"OLD","value":"x"}]}]}`))
 	case "/job/gotham/job/deploy/42/api/json":
 		// qa is no longer a choice, and DRY_RUN did not exist yet.
-		w.Write([]byte(`{"actions":[{"_class":"hudson.model.ParametersAction","parameters":[
+		w.Write([]byte(`{"number":42,"building":true,"actions":[{"_class":"hudson.model.ParametersAction","parameters":[
 			{"name":"ENV","value":"qa"}]}]}`))
+	case "/job/gotham/job/deploy/41/logText/progressiveText":
+		w.Header().Set("X-Text-Size", "120")
+		w.Write([]byte("[Pipeline] input\nDeploy to prod?\nDeploy or Abort\nApproved by Bruce Wayne\nFinished: FAILURE\n"))
 	case "/job/gotham/job/deploy/42/logText/progressiveText":
 		// Two chunks, like a real running build.
 		if r.URL.Query().Get("start") == "0" {
@@ -77,7 +80,7 @@ func (f *fakeJenkins) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Finished: SUCCESS\n"))
 	case "/job/gotham/job/deploy/42/wfapi/pendingInputActions":
 		if !f.withInput {
-			http.NotFound(w, r)
+			w.Write([]byte(`[]`))
 			return
 		}
 		w.Write([]byte(`[{"id":"Prod","proceedText":"Deploy","message":"Deploy to prod?",

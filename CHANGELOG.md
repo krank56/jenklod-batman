@@ -4,6 +4,13 @@ What changed in each release of jenklod-batman. `jk changelog` prints this file,
 
 ## Unreleased
 
+### Pre-answered inputs
+- `i` on a running pipeline build that hasn't paused yet answers its input ahead of time: pick Proceed or Abort, and the app sends it as soon as the build pauses.
+- It proposes the answer given last time, read from the consoles of the job's last 3 finished builds, and then only answers if the build asks the same question. Otherwise the input waits for you and you get a notification.
+- Inputs with fields get the step's defaults. If a field has no default or is a password, the input waits for you.
+- Armed builds show `⏵ armed` in the builds list, the log and the watched jobs, and are polled even when their job isn't watched. A desktop notification says when the answer was sent, or that the build finished without asking.
+- Pre-answers last while the app is open; `q` asks before quitting when some are armed.
+
 ### Watched jobs
 - Watched jobs stay in sight: a strip under the header lists up to 5 of them on every screen but the root, waiting for input first, then failed, then running. `W` hides or shows it, saved as `watch_strip`.
 - Building a job from the app, with `b`, `R` or a macro (in the TUI or `jk <macro>`), watches it.

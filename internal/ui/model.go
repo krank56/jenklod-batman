@@ -77,6 +77,10 @@ type Model struct {
 
 	confirm *confirmState
 	help    bool
+	arm     *armForm
+
+	// armed are input answers given ahead, by armKey.
+	armed map[string]*armed
 
 	status    string
 	statusErr bool
@@ -253,6 +257,7 @@ func New(o Options) Model {
 		wiz:      newWizard(o.Config, o.WizardFn),
 		watch:    map[string]*watchState{},
 		follows:  map[int]*follow{},
+		armed:    map[string]*armed{},
 		scr:      scrSplash,
 		gh:       github.New(),
 		jobRepos: map[string]github.Repo{},
@@ -768,6 +773,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.builds.detail = msg.detail
 		m.builds.noInputAPI = msg.noInputAPI
+		var armCmds []tea.Cmd
+		for _, b := range msg.detail.Builds {
+			if len(b.Inputs) > 0 {
+				armCmds = append(armCmds, m.armedSaw(msg.job.FullName(), &b))
+			}
+		}
+		armCmd := tea.Batch(armCmds...)
 		if i := buildIndex(msg.detail, m.builds.selectNum); i >= 0 {
 			m.builds.cursor, m.builds.selectNum = i, 0
 		} else if i := buildIndex(msg.detail, keep); i >= 0 {
@@ -776,7 +788,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.builds.cursor = clamp(m.builds.cursor, 0, max(0, len(msg.detail.Builds)-1))
 		if m.builds.pendingBuild {
 			m.builds.pendingBuild = false
-			return m.startBuild()
+			next, cmd := m.startBuild()
+			return next, tea.Batch(cmd, armCmd)
 		}
 		if m.builds.pendingRebuild {
 			m.builds.pendingRebuild = false
@@ -787,9 +800,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					num = msg.detail.Builds[0].Number
 				}
 			}
-			return m.startRebuild(num, m.builds.rebuildFrom)
+			next, cmd := m.startRebuild(num, m.builds.rebuildFrom)
+			return next, tea.Batch(cmd, armCmd)
 		}
-		return m, nil
+		return m, armCmd
 
 	case rebuildMsg:
 		return m.handleRebuild(msg)
@@ -801,6 +815,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.scr == scrLog {
 			m.log.inputs = nil
 			return m, m.loadLogInputs(m.log.gen, m.log.job, m.log.number)
+		}
+		if m.scr == scrJobs {
+			return m, m.pollWatched()
 		}
 		m.builds.loading = true
 		return m, m.loadDetail(m.builds.job)
@@ -887,7 +904,16 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.gen != m.watchGen {
 			return m, nil // superseded by a new interval
 		}
-		return m, tea.Batch(m.pollWatched(), m.watchTick())
+		return m, tea.Batch(m.pollWatched(), m.pollArmed(), m.watchTick())
+
+	case pastInputMsg:
+		return m.handlePastInput(msg)
+
+	case armedResultMsg:
+		return m.handleArmedResult(msg)
+
+	case autoAnsweredMsg:
+		return m.handleAutoAnswered(msg)
 
 	case watchResultMsg:
 		return m, m.handleWatch(msg)
@@ -958,7 +984,7 @@ func (m *Model) handleWatch(msg watchResultMsg) tea.Cmd {
 		(b.Number > st.number || (b.Number == st.number && st.building))
 	st.number, st.building, st.known = b.Number, b.Building, true
 	if b.Building {
-		return m.notifyInputs(msg.name, st, b)
+		return tea.Batch(m.armedSaw(msg.name, b), m.notifyInputs(msg.name, st, b))
 	}
 	if !finished {
 		return nil
@@ -1141,6 +1167,9 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	if m.arm != nil {
+		return m.armKeyPress(k)
+	}
 	if m.help {
 		m.help = false
 		return m, nil
@@ -1182,7 +1211,7 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "q":
 		if m.scr == scrJobs {
-			return m, tea.Quit
+			return m.quit()
 		}
 		return m.back()
 	}
@@ -1229,6 +1258,18 @@ func (m Model) back() (tea.Model, tea.Cmd) {
 		return m, m.loadJobs(m.jobs.path)
 	}
 	return m, nil
+}
+
+// quit leaves, after asking when pre-answers would be lost.
+func (m Model) quit() (tea.Model, tea.Cmd) {
+	if n := len(m.armed); n > 0 {
+		m.confirm = &confirmState{
+			prompt: fmt.Sprintf("%d pre-answered input(s) are lost on quit. Quit anyway?", n),
+			onYes:  tea.Quit,
+		}
+		return m, nil
+	}
+	return m, tea.Quit
 }
 
 // cyclePoll steps the watch interval through the presets and saves it.
@@ -1447,6 +1488,19 @@ func (m Model) jobsKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		mm.builds.rebuildNum = -1
 		mm.builds.rebuildFrom = scrBuilds
 		return mm, cmd
+	case "i":
+		if !r.pin {
+			return m, nil
+		}
+		st := m.watch[job.FullName()]
+		if st == nil || st.last == nil || !st.last.Building {
+			m.setStatus(job.FullName()+" is not running", true)
+			return m, nil
+		}
+		if len(st.last.Inputs) > 0 {
+			return m.openInput(job, st.last.Number, st.last.Inputs[0], scrJobs)
+		}
+		return m.openArm(job, st.last.Number)
 	case "L", "x":
 		if job.IsFolder() {
 			return m, nil
@@ -1586,12 +1640,17 @@ func (m Model) buildsKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setStatus("Can't list input steps: Jenkins lacks the Pipeline Stage View plugin — press O to answer in the browser", true)
 			return m, nil
 		}
-		// Prefer the selected build, else the newest one that is waiting.
-		if !ok || len(b.Inputs) == 0 {
+		// The selected build: answer it, or answer ahead if it runs;
+		// else the newest one that is waiting.
+		switch {
+		case ok && len(b.Inputs) > 0:
+		case ok && b.Building && m.builds.job.IsPipeline():
+			return m.openArm(m.builds.job, b.Number)
+		default:
 			b, ok = m.waitingBuild()
 		}
 		if !ok {
-			m.setStatus("No build is waiting for input", true)
+			m.setStatus("No build is running or waiting for input", true)
 			return m, nil
 		}
 		return m.openInput(m.builds.job, b.Number, b.Inputs[0], scrBuilds)
@@ -1819,7 +1878,10 @@ func (m Model) logKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, openURL(m.client.BrowserURL(m.log.job.Path, m.log.number) + "console")
 	case "i":
 		if len(m.log.inputs) == 0 {
-			m.setStatus("This build is not waiting for input", true)
+			if m.log.more {
+				return m.openArm(m.log.job, m.log.number)
+			}
+			m.setStatus("This build is not running", true)
 			return m, nil
 		}
 		return m.openInput(m.log.job, m.log.number, m.log.inputs[0], scrLog)

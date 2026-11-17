@@ -31,7 +31,7 @@ Prebuilt archives for macOS and Linux (amd64 and arm64) are attached to each [re
 
 - **[Watched jobs](https://jenklod-batman.ytalbi.com/guide/watching):** pinned jobs at the top and in a strip on every other screen, with their last build, live progress and desktop notifications. Jobs you build from the app are watched.
 - **[Search](https://jenklod-batman.ytalbi.com/guide/search):** `/` fuzzy-matches jobs in every folder.
-- **[Pipeline inputs](https://jenklod-batman.ytalbi.com/guide/inputs):** see and answer "Deploy to prod?" from the terminal.
+- **[Pipeline inputs](https://jenklod-batman.ytalbi.com/guide/inputs):** see and answer "Deploy to prod?" from the terminal, or answer it ahead while the build runs.
 - **[Rebuild and branches](https://jenklod-batman.ytalbi.com/guide/browsing#rebuilding):** `R` refills the build form from an earlier build, `ctrl+g` picks a GitHub branch for a parameter, and the new build is followed from the queue into the list.
 - **[Macros](https://jenklod-batman.ytalbi.com/guide/macros):** saved build sequences, run in the TUI or with `jk <name>`. Give one an argument to make it an alias: `jk cvaden-nuxt-staging my-branch`.
 
@@ -51,7 +51,7 @@ Prebuilt archives for macOS and Linux (amd64 and arm64) are attached to each [re
 | `ctrl+g` | in the build form: pick a GitHub branch for the text field (needs [gh](https://cli.github.com)) |
 | `x` | abort a running build (asks y/n); in the jobs list, the job's last build |
 | `L` | in the jobs list: open the job's last build log |
-| `i` | answer a paused pipeline `input` step, e.g. "Deploy to prod?" |
+| `i` | answer a paused pipeline `input` step, e.g. "Deploy to prod?"; on a running build, answer it ahead of time |
 | `w` | watch or unwatch a job |
 | `J`/`K` | move a watched job down or up |
 | `p` | cycle the watch poll interval: 5, 10, 20, 30, 60s (saved) |

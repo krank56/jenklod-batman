@@ -18,6 +18,14 @@ On a watched row:
 
 <Demo name="search-watch" caption="Find a job in a nested folder, watch it, and move it to the top." />
 
+Building a job from the app watches it too: <kbd>b</kbd>, <kbd>R</kbd>, and the build steps of a [macro](/guide/macros), in the TUI or with `jk <macro>`.
+
+## On every screen
+
+Away from the root, a strip under the header keeps up to 5 watched jobs in sight: in a folder, in search results, on a job's builds, in a log and in the macros. Builds waiting for input come first, then failed or broken ones, then running ones, then the rest, in your order. Past 5, the rule under it says how many more there are.
+
+The strip is for reading; act on a job from the root, or open it. <kbd>W</kbd> hides it, or shows it again. The choice is saved as `watch_strip`.
+
 If a watched job can't be polled (deleted, renamed, or no longer visible to you), its row shows `✗` and the reason until you stop watching it.
 
 Watched jobs are saved per Jenkins URL, so switching controllers with `--setup` doesn't mix them.

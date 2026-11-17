@@ -28,6 +28,17 @@ type Macro struct {
 	Steps []Step `toml:"steps"`
 }
 
+// BuiltJobs lists the jobs the macro's build steps start, once each.
+func (m Macro) BuiltJobs() []string {
+	var out []string
+	for _, s := range m.Steps {
+		if s.Kind == StepBuild && !slices.Contains(out, s.Job) {
+			out = append(out, s.Job)
+		}
+	}
+	return out
+}
+
 // HasParam reports whether a build step of the macro passes parameter k.
 func (m Macro) HasParam(k string) bool {
 	for _, s := range m.Steps {

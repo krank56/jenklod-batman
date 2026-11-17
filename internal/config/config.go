@@ -33,6 +33,9 @@ type Config struct {
 	// plays by default. MusicVolume is 0 to 100; unset means DefaultVolume.
 	Music       *bool `toml:"music,omitempty"`
 	MusicVolume *int  `toml:"music_volume,omitempty"`
+	// WatchStrip hides the watched jobs strip shown above every screen
+	// but the root when false (W in the TUI); it shows by default.
+	WatchStrip *bool `toml:"watch_strip,omitempty"`
 	// Pinned is the pre-0.2 list of pins, not tied to a controller. Load
 	// moves it into Servers; it is kept only to read old files.
 	Pinned []string `toml:"pinned,omitempty"`
@@ -95,6 +98,12 @@ func (c *Config) MusicOn() bool { return c.Music == nil || *c.Music }
 
 // SetMusic turns the theme on or off.
 func (c *Config) SetMusic(on bool) { c.Music = &on }
+
+// StripOn reports whether the watched jobs strip shows (the default).
+func (c *Config) StripOn() bool { return c.WatchStrip == nil || *c.WatchStrip }
+
+// SetStrip shows or hides the watched jobs strip.
+func (c *Config) SetStrip(on bool) { c.WatchStrip = &on }
 
 // Volume is the music volume in percent.
 func (c *Config) Volume() int {
@@ -165,6 +174,15 @@ func (c *Config) TogglePin(fullName string) bool {
 		return false
 	}
 	s.Pinned = append(s.Pinned, fullName)
+	return true
+}
+
+// Watch pins a job unless it already is, and reports whether it was added.
+func (c *Config) Watch(fullName string) bool {
+	if c.IsPinned(fullName) {
+		return false
+	}
+	c.TogglePin(fullName)
 	return true
 }
 

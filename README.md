@@ -29,7 +29,7 @@ Prebuilt archives for macOS and Linux (amd64 and arm64) are attached to each [re
 
 ## Highlights
 
-- **[Watched jobs](https://jenklod-batman.ytalbi.com/guide/watching):** pinned jobs at the top, with their last build, live progress and desktop notifications.
+- **[Watched jobs](https://jenklod-batman.ytalbi.com/guide/watching):** pinned jobs at the top and in a strip on every other screen, with their last build, live progress and desktop notifications. Jobs you build from the app are watched.
 - **[Search](https://jenklod-batman.ytalbi.com/guide/search):** `/` fuzzy-matches jobs in every folder.
 - **[Pipeline inputs](https://jenklod-batman.ytalbi.com/guide/inputs):** see and answer "Deploy to prod?" from the terminal.
 - **[Rebuild and branches](https://jenklod-batman.ytalbi.com/guide/browsing#rebuilding):** `R` refills the build form from an earlier build, `ctrl+g` picks a GitHub branch for a parameter, and the new build is followed from the queue into the list.
@@ -55,6 +55,7 @@ Prebuilt archives for macOS and Linux (amd64 and arm64) are attached to each [re
 | `w` | watch or unwatch a job |
 | `J`/`K` | move a watched job down or up |
 | `p` | cycle the watch poll interval: 5, 10, 20, 30, 60s (saved) |
+| `W` | show or hide the watched jobs strip on every screen (saved) |
 | `m` | macros |
 | `o` | open in browser |
 | `f` | follow log output |

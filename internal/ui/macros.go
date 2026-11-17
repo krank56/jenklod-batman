@@ -265,7 +265,7 @@ func (m Model) startMacro(mac config.Macro) (tea.Model, tea.Cmd) {
 		r.events <- macroDoneMsg{run: r, err: err}
 	}()
 	m.setStatus("▶ Running macro "+mac.Name, false)
-	return m, waitMacro(r)
+	return m, tea.Batch(waitMacro(r), m.autoWatch(mac.BuiltJobs()...))
 }
 
 // ---- editor -----------------------------------------------------------

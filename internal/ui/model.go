@@ -648,8 +648,18 @@ func (m *Model) setErr(err error) {
 	m.setStatus(err.Error(), true)
 }
 
-// Update routes messages.
+// Update routes messages, then fits the log to the room the watched
+// strip leaves it.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	next, cmd := m.update(msg)
+	if mm, ok := next.(Model); ok {
+		mm.resizeLog()
+		return mm, cmd
+	}
+	return next, cmd
+}
+
+func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
@@ -853,7 +863,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.setStatus("🦇 Build queued: "+msg.job.FullName(), false)
-		cmd := m.refresh()
+		cmd := tea.Batch(m.refresh(), m.autoWatch(msg.job.FullName()))
 		if msg.id > 0 {
 			f := &follow{job: msg.job, since: time.Now(), fromLog: msg.fromLog}
 			m.follows[msg.id] = f
@@ -1158,6 +1168,8 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "p":
 		return m.cyclePoll()
+	case "W":
+		return m.toggleStrip()
 	case "M":
 		return m.toggleMusic()
 	case "+", "=":
@@ -1769,12 +1781,18 @@ func (m Model) openLog(number int) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) resizeLog() {
-	w, h := max(1, m.w), max(1, m.h-5)
+	w, h := max(1, m.w), max(1, m.h-5-m.stripLines())
 	if m.log.vp.Width == 0 {
 		m.log.vp = viewport.New(w, h)
 		return
 	}
+	if m.log.vp.Width == w && m.log.vp.Height == h {
+		return
+	}
 	m.log.vp.Width, m.log.vp.Height = w, h
+	if m.log.follow {
+		m.log.vp.GotoBottom()
+	}
 }
 
 func (m Model) logKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {

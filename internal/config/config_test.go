@@ -156,3 +156,23 @@ func TestMusicRoundTrip(t *testing.T) {
 		t.Errorf("volume 250 read as %d, want 100", again.Volume())
 	}
 }
+
+func TestStripAndWatch(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	c, _ := Load(path)
+	c.URL = "https://ci.gotham"
+	if !c.StripOn() {
+		t.Error("the strip shows by default")
+	}
+	if !c.Watch("gotham/deploy") || c.Watch("gotham/deploy") {
+		t.Error("Watch adds a job once")
+	}
+	c.SetStrip(false)
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	again, _ := Load(path)
+	if again.StripOn() || !reflect.DeepEqual(again.Pins(), []string{"gotham/deploy"}) {
+		t.Errorf("after save: strip %v, pins %v", again.StripOn(), again.Pins())
+	}
+}

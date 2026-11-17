@@ -132,6 +132,17 @@ func runMacro(cfgPath string, args []string) error {
 		}
 	}
 
+	// Watch what it builds, so the TUI shows and notifies it next time.
+	added := false
+	for _, j := range mac.BuiltJobs() {
+		added = cfg.Watch(j) || added
+	}
+	if added {
+		if err := cfg.Save(); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: watching the jobs it builds: %v\n", err)
+		}
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	r := &macro.Runner{

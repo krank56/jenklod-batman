@@ -2,6 +2,12 @@
 
 What changed in each release of jenklod-batman. `jk changelog` prints this file, and the first launch after an upgrade shows what's new.
 
+## Unreleased
+
+### Watched jobs
+- Watched jobs stay in sight: a strip under the header lists up to 5 of them on every screen but the root, waiting for input first, then failed, then running. `W` hides or shows it, saved as `watch_strip`.
+- Building a job from the app, with `b`, `R` or a macro (in the TUI or `jk <macro>`), watches it.
+
 ## v0.5.0 (2026-10-14)
 
 ### Theme music

@@ -26,7 +26,8 @@ func (m Model) View() string {
 		return m.wiz.view(m.w, m.h, m.frame)
 	}
 
-	bodyH := max(1, m.h-1-footerLines)
+	strip := m.stripLines()
+	bodyH := max(1, m.h-1-footerLines-strip)
 	var body string
 	switch {
 	case m.confirm != nil:
@@ -52,6 +53,9 @@ func (m Model) View() string {
 		}
 	}
 	body = lipgloss.NewStyle().Width(m.w).Height(bodyH).MaxHeight(bodyH).Render(body)
+	if strip > 0 {
+		return lipgloss.JoinVertical(lipgloss.Left, m.headerView(), m.stripView(), body, m.footerView())
+	}
 	return lipgloss.JoinVertical(lipgloss.Left, m.headerView(), body, m.footerView())
 }
 
@@ -557,6 +561,7 @@ func (m Model) helpView(h int) string {
 		{"w", "watch / unwatch job — notifies when builds finish"},
 		{"J/K", "move a watched job down / up"},
 		{"p", "cycle the watch poll interval (saved)"},
+		{"W", "show / hide watched jobs on every screen (saved)"},
 		{"m", "macros: run, create, edit"},
 		{"o", "open in browser (builds, log: the job's page)"},
 		{"O", "builds, log: open the build / console in browser"},

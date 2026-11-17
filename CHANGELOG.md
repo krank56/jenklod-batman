@@ -2,7 +2,7 @@
 
 What changed in each release of jenklod-batman. `jk changelog` prints this file, and the first launch after an upgrade shows what's new.
 
-## Unreleased
+## v0.6.0 (2026-11-17)
 
 ### Pre-answered inputs
 - `i` on a running pipeline build that hasn't paused yet answers its input ahead of time: pick Proceed or Abort, and the app sends it as soon as the build pauses.

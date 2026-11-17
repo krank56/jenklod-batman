@@ -32,6 +32,8 @@ func (m Model) View() string {
 	switch {
 	case m.confirm != nil:
 		body = m.confirmView(bodyH)
+	case m.arm != nil:
+		body = m.armView(bodyH)
 	case m.help:
 		body = m.helpView(bodyH)
 	case m.whatsNew.Version != "":
@@ -111,6 +113,13 @@ func (m Model) footerView() string {
 	case m.confirm != nil:
 		add("y", "yes")
 		add("n", "no")
+	case m.arm != nil:
+		add("enter", "arm")
+		add("←/→", "change")
+		if m.arm.existing {
+			add("d", "disarm")
+		}
+		add("esc", "cancel")
 	case m.scr == scrJobs && m.jobs.filtering:
 		add("↑/↓", "move")
 		add("enter", "keep results")
@@ -126,6 +135,9 @@ func (m Model) footerView() string {
 		add("x", "abort")
 		add("w", "watch")
 		if r.pin {
+			if st := m.watch[r.job.FullName()]; st != nil && st.last != nil && st.last.Building {
+				add("i", "input")
+			}
 			add("J/K", "move")
 		}
 		add("m", "macros")
@@ -134,7 +146,9 @@ func (m Model) footerView() string {
 		add("q", "quit")
 	case m.scr == scrBuilds:
 		add("↵", "log")
-		if _, ok := m.waitingBuild(); ok {
+		if b, ok := m.selectedBuild(); ok && b.Building && len(b.Inputs) == 0 && m.builds.job.IsPipeline() {
+			add("i", "pre-answer")
+		} else if _, ok := m.waitingBuild(); ok {
 			add("i", "answer input")
 		}
 		add("b", "build")
@@ -147,6 +161,8 @@ func (m Model) footerView() string {
 	case m.scr == scrLog:
 		if len(m.log.inputs) > 0 {
 			add("i", "answer input")
+		} else if m.log.more && m.log.job.IsPipeline() {
+			add("i", "pre-answer")
 		}
 		add("f", "follow")
 		add("g/G", "top/end")
@@ -337,13 +353,17 @@ func (m Model) pinRow(job jenkins.Job, sel bool, nameW int) string {
 	}
 	icon, result := statusIcon(bd.Status(), bd.Building, m.frame), resultText(bd)
 	cause := bd.Cause
+	cst := sDim
 	if len(bd.Inputs) > 0 {
 		icon, result = sWait.Render("⏸"), sWait.Render("INPUT")
 		cause = bd.Inputs[0].Message
 	}
+	if mark := m.armedMark(full, bd); mark != "" {
+		cause, cst = mark, sWait
+	}
 	used := 2 + 2 + nameW + 2 + 7 + 1 + 10 + 1 + 10 + 1 + 18 + 1
 	return fmt.Sprintf("%s %s  %s %s %s %s %s", icon, name, pad(fmt.Sprintf("#%d", bd.Number), 7),
-		pad(result, 10), pad(fmtAgo(bd.Started), 10), pad(dur, 18), sDim.Render(truncate(cause, max(0, m.w-used))))
+		pad(result, 10), pad(fmtAgo(bd.Started), 10), pad(dur, 18), cst.Render(truncate(cause, max(0, m.w-used))))
 }
 
 // pollError shortens the usual reasons a pin cannot be polled.
@@ -421,6 +441,9 @@ func (m Model) buildsView(h int) string {
 			icon, result = sWait.Render("⏸"), sWait.Render("INPUT")
 			cause = sWait.Render(truncate(bd.Inputs[0].Message, max(0, m.w-60)))
 		}
+		if mark := m.armedMark(job.FullName(), bd); mark != "" {
+			cause = sWait.Render(truncate(mark, max(0, m.w-60)))
+		}
 		row := fmt.Sprintf("%s%s %s %s %s %s %s",
 			cur, icon, num, pad(result, 10), pad(fmtAgo(bd.Started), 10), pad(dur, 18), cause)
 		b.WriteString(row + "\n")
@@ -473,6 +496,15 @@ func (m Model) logView() string {
 			vp = rest
 		}
 		return head + "\n" + banner + "\n" + vp
+	}
+	if m.log.more {
+		if mark := m.armedMark(m.log.job.FullName(), jenkins.Build{Number: m.log.number, Building: true}); mark != "" {
+			banner := sWait.Render(mark) + sDim.Render("  — press ") + sKey.Render("i") + sDim.Render(" to change")
+			if _, rest, ok := strings.Cut(vp, "\n"); ok {
+				vp = rest
+			}
+			return head + "\n" + banner + "\n" + vp
+		}
 	}
 	return head + "\n" + vp
 }
@@ -557,7 +589,7 @@ func (m Model) helpView(h int) string {
 		{"ctrl+g", "in the build form: pick a GitHub branch for the text field"},
 		{"x", "abort a running build (asks first)"},
 		{"L", "open the last build's log (jobs list)"},
-		{"i", "answer a paused pipeline input (proceed / abort)"},
+		{"i", "answer a paused pipeline input; on a running build, answer it ahead"},
 		{"w", "watch / unwatch job — notifies when builds finish"},
 		{"J/K", "move a watched job down / up"},
 		{"p", "cycle the watch poll interval (saved)"},

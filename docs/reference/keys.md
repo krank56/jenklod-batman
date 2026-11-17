@@ -18,7 +18,7 @@
 | <kbd>M</kbd> | [Theme music](/guide/music) off or on; it plays by default (saved) |
 | <kbd>+</kbd>/<kbd>=</kbd>, <kbd>-</kbd> | Music volume up / down, while it plays (saved) |
 | <kbd>?</kbd> | Help |
-| <kbd>q</kbd> | Back; quit from the jobs screen |
+| <kbd>q</kbd> | Back; quit from the jobs screen (asks first while an input is [pre-answered](/guide/inputs#answering-ahead)) |
 | <kbd>ctrl+c</kbd> | Quit |
 
 ## Jobs list
@@ -32,6 +32,7 @@
 | <kbd>x</kbd> | Abort the last build if it's running (asks first) |
 | <kbd>w</kbd> | Watch or stop watching |
 | <kbd>J</kbd>/<kbd>K</kbd> | Move a watched job down / up |
+| <kbd>i</kbd> | On a watched job: answer its pending input, or [answer ahead](/guide/inputs#answering-ahead) while it runs |
 | <kbd>o</kbd> | Open in the browser |
 | <kbd>r</kbd> | Refresh the folder, the search index and the watched jobs |
 
@@ -43,7 +44,7 @@
 | <kbd>b</kbd> | Build |
 | <kbd>R</kbd> | [Rebuild](/guide/browsing#rebuilding) with the selected build's parameters |
 | <kbd>x</kbd> | Abort the selected build (asks first) |
-| <kbd>i</kbd> | Answer a pending input |
+| <kbd>i</kbd> | Answer a pending input; on a running build, [answer ahead](/guide/inputs#answering-ahead) |
 | <kbd>w</kbd> | Watch or stop watching |
 | <kbd>o</kbd> | Open the job's page in the browser |
 | <kbd>O</kbd> | Open the selected build in the browser |
@@ -55,7 +56,7 @@
 |---|---|
 | <kbd>f</kbd> | Toggle following new output |
 | <kbd>g</kbd>/<kbd>G</kbd> | Top / bottom (bottom also resumes following) |
-| <kbd>i</kbd> | Answer a pending input |
+| <kbd>i</kbd> | Answer a pending input; while it runs, [answer ahead](/guide/inputs#answering-ahead) |
 | <kbd>R</kbd> | [Rebuild](/guide/browsing#rebuilding) with this build's parameters |
 | <kbd>x</kbd> | Abort the build (asks first) |
 | <kbd>o</kbd> | Open the job's page in the browser |

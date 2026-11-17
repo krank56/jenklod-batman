@@ -20,6 +20,8 @@ On a watched row:
 
 Building a job from the app watches it too: <kbd>b</kbd>, <kbd>R</kbd>, and the build steps of a [macro](/guide/macros), in the TUI or with `jk <macro>`.
 
+On a watched row, <kbd>i</kbd> answers the running build's input, or [answers it ahead](/guide/inputs#answering-ahead) if it hasn't paused yet.
+
 ## On every screen
 
 Away from the root, a strip under the header keeps up to 5 watched jobs in sight: in a folder, in search results, on a job's builds, in a log and in the macros. Builds waiting for input come first, then failed or broken ones, then running ones, then the rest, in your order. Past 5, the rule under it says how many more there are.

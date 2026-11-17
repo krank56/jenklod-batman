@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strconv"
+	"strings"
 )
 
 // InputRequest is a pipeline `input` step waiting for someone to proceed
@@ -119,4 +121,75 @@ func (c *Client) AttachInputs(ctx context.Context, path []string, builds []Build
 		builds[i].Inputs = ins
 	}
 	return true, nil
+}
+
+// PastInput is what a finished build's console says about the first input
+// step it paused on and how it was answered. Jenkins keeps no other record
+// of it that the REST API returns once the build is over.
+type PastInput struct {
+	Number      int // the build it was read from
+	Message     string
+	ProceedText string
+	Approved    bool   // false: aborted
+	By          string // who answered, as the console names them
+}
+
+// inputPrompt is the line the input step prints under its message.
+var inputPrompt = regexp.MustCompile(`^(.+) or Abort$`)
+
+// ParsePastInput finds the first answered input step in a console log:
+//
+//	[Pipeline] input
+//	Deploy to prod?
+//	Deploy or Abort
+//	Approved by Bruce Wayne
+func ParsePastInput(log string) (PastInput, bool) {
+	lines := strings.Split(strings.ReplaceAll(log, "\r", ""), "\n")
+	for i, l := range lines {
+		m := inputPrompt.FindStringSubmatch(strings.TrimSpace(l))
+		if m == nil || i == 0 {
+			continue
+		}
+		// The message is everything since "[Pipeline] input", or the line
+		// above the prompt when that marker is missing.
+		first := i - 1
+		for j := i - 1; j >= 0 && i-j <= 20; j-- {
+			if strings.TrimSpace(lines[j]) == "[Pipeline] input" {
+				first = j + 1
+				break
+			}
+		}
+		msg := strings.TrimSpace(strings.Join(lines[first:i], "\n"))
+		if msg == "" {
+			continue
+		}
+		for _, after := range lines[i+1:] {
+			after = strings.TrimSpace(after)
+			if strings.HasPrefix(after, "[Pipeline] input") {
+				break // the next input step: this one was never answered
+			}
+			for prefix, ok := range map[string]bool{"Approved by ": true, "Aborted by ": false, "Rejected by ": false} {
+				if by, found := strings.CutPrefix(after, prefix); found {
+					return PastInput{Message: msg, ProceedText: m[1], Approved: ok, By: by}, true
+				}
+			}
+		}
+	}
+	return PastInput{}, false
+}
+
+// LastInput reads the consoles of builds, newest first, and returns the
+// first answered input step found.
+func (c *Client) LastInput(ctx context.Context, path []string, builds []int) (PastInput, bool, error) {
+	for _, n := range builds {
+		chunk, err := c.Log(ctx, path, n, 0)
+		if err != nil {
+			return PastInput{}, false, err
+		}
+		if p, ok := ParsePastInput(chunk.Text); ok {
+			p.Number = n
+			return p, true, nil
+		}
+	}
+	return PastInput{}, false, nil
 }

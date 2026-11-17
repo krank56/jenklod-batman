@@ -19,7 +19,7 @@ const stripMax = 5
 // on every browsing screen but the root listing, which has its own
 // Watched section, and never under a dialog or a form.
 func (m Model) showStrip() bool {
-	if !m.cfg.StripOn() || len(m.cfg.Pins()) == 0 || m.confirm != nil || m.help || m.whatsNew.Version != "" {
+	if !m.cfg.StripOn() || len(m.cfg.Pins()) == 0 || m.confirm != nil || m.help || m.whatsNew.Version != "" || m.arm != nil {
 		return false
 	}
 	switch m.scr {

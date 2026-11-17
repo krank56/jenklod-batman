@@ -7,9 +7,12 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/krank56/jenklod-batman/internal/jenkins"
+	"github.com/krank56/jenklod-batman/internal/notify"
 )
 
 func TestPreAnswerFlow(t *testing.T) {
+	sendDesktop = func(string, string) error { return nil }
+	t.Cleanup(func() { sendDesktop = notify.Send })
 	cfg := newCfg(t)
 	m, fj := start(t, cfg)
 	m = drive(t, m, key("enter")) // gotham/

@@ -1025,9 +1025,13 @@ func (m *Model) notifyInputs(name string, st *watchState, b *jenkins.Build) tea.
 
 type notifyFailedMsg struct{ err error }
 
+// sendDesktop is notify.Send; tests replace it, so they pass on machines
+// without a notifier.
+var sendDesktop = notify.Send
+
 func sendNotification(title, body string) tea.Cmd {
 	return func() tea.Msg {
-		if err := notify.Send(title, body); err != nil {
+		if err := sendDesktop(title, body); err != nil {
 			return notifyFailedMsg{err}
 		}
 		return nil
